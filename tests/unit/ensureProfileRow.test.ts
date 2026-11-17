@@ -4,10 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mem = new Map<string, string>();
 vi.stubGlobal("sessionStorage", { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v), removeItem: (k: string) => void mem.delete(k) });
 
-type Row = Record<string, any>;
+type Row = Record<string, unknown>;
 const db: { accounts: Row[]; profiles: Row[] } = { accounts: [], profiles: [] };
 const inserts: Row[] = []; const updates: { table: string; patch: Row }[] = []; const deletes: string[] = [];
-let currentUser: any = null; let seq = 0;
+let currentUser: Record<string, unknown> | null = null; let seq = 0;
 function from(table: "accounts" | "profiles") {
   let op: "select" | "update" | "insert" = "select"; let patch: Row = {}; let ins: Row = {}; const filters: ((r: Row) => boolean)[] = [];
   const run = (mode: "many" | "maybe" | "single") => {
@@ -16,17 +16,22 @@ function from(table: "accounts" | "profiles") {
     if (op === "insert") { const row = { id: `${table}-${++seq}`, deleted_at: null, is_primary: false, ...ins }; inserts.push({ table, ...ins }); db[table].push(row); return Promise.resolve({ data: mode === "many" ? [row] : row, error: null }); }
     return Promise.resolve({ data: mode === "many" ? matched : (matched[0] ?? null), error: null });
   };
-  const api: any = {
+  interface Api {
+    select(): Api; update(p: Row): Api; insert(r: Row): Api; delete(): Api; eq(c: string, v: unknown): Api; is(c: string, v: unknown): Api; limit(): Api;
+    maybeSingle(): ReturnType<typeof run>; single(): ReturnType<typeof run>;
+    then(res: (v: Awaited<ReturnType<typeof run>>) => unknown, rej: (e: unknown) => unknown): Promise<unknown>;
+  }
+  const api: Api = {
     select() { return api; }, update(p: Row) { op = "update"; patch = p; return api; }, insert(r: Row) { op = "insert"; ins = r; return api; },
     delete() { deletes.push(table); return api; },
-    eq(c: string, v: any) { filters.push((r) => r[c] === v); return api; }, is(c: string, v: any) { filters.push((r) => (r[c] ?? null) === v); return api; }, limit() { return api; },
-    maybeSingle() { return run("maybe"); }, single() { return run("single"); }, then(res: any, rej: any) { return run("many").then(res, rej); },
+    eq(c: string, v: unknown) { filters.push((r) => r[c] === v); return api; }, is(c: string, v: unknown) { filters.push((r) => (r[c] ?? null) === v); return api; }, limit() { return api; },
+    maybeSingle() { return run("maybe"); }, single() { return run("single"); }, then(res, rej) { return run("many").then(res, rej); },
   };
   return api;
 }
 vi.mock("../../lib/supabaseClient", () => ({
   supabase: {
-    from: (t: any) => from(t),
+    from: (t: "accounts" | "profiles") => from(t),
     auth: { getUser: async () => ({ data: { user: currentUser } }) },
     rpc: async (name: string) => (name === "my_account_id" ? { data: db.accounts.find((a) => a.auth_id === currentUser?.id)?.id ?? null, error: null } : { data: null, error: null }),
   },

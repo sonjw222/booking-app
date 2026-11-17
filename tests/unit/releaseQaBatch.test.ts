@@ -10,28 +10,29 @@ const read = (p: string) => readFileSync(join(__dirname, "../..", p), "utf-8");
 
 // ---- 가짜 supabase (members.ts 검색/목록)
 const calls: { table: string; ilike: [string, string][]; select: string }[] = [];
-let tables: Record<string, any[]> = {};
-const rpcCalls: [string, any][] = [];
-let rpcData: any[] = [];
+let tables: Record<string, unknown[]> = {};
+const rpcCalls: [string, unknown][] = [];
+let rpcData: unknown[] = [];
 let rpcError: { code?: string; message: string } | null = null;
 vi.mock("../../lib/supabaseClient", () => ({
   supabase: {
     from: (table: string) => {
       const rec = { table, ilike: [] as [string, string][], select: "" };
-      const chain: any = {
+      interface Chain { select(s: string): Chain; eq(): Chain; in(): Chain; order(): Chain; limit(): Chain; range(): Chain; is(): Chain; ilike(c: string, v: string): Chain; then(res: (v: unknown) => unknown): Promise<unknown> }
+      const chain: Chain = {
         select(s: string) { rec.select = s; return chain; },
         eq() { return chain; }, in() { return chain; }, order() { return chain; }, limit() { return chain; }, range() { return chain; }, is() { return chain; },
         ilike(c: string, v: string) { rec.ilike.push([c, v]); return chain; },
-        then(res: any) { calls.push(rec); return Promise.resolve({ data: tables[table] ?? [], error: null }).then(res); },
+        then(res) { calls.push(rec); return Promise.resolve({ data: tables[table] ?? [], error: null }).then(res); },
       };
       return chain;
     },
-    rpc: async (name: string, args: any) => { rpcCalls.push([name, args]); return { data: rpcData, error: rpcError }; },
+    rpc: async (name: string, args: unknown) => { rpcCalls.push([name, args]); return { data: rpcData, error: rpcError }; },
   },
 }));
 import { fetchMembers, searchAccountsForMember } from "../../lib/members";
 import { displayMemberName, isSyntheticMemberName, UNNAMED_MEMBER_LABEL } from "../../lib/memberName";
-import { applyRulesToProducts, bulkRuleSummary } from "../../lib/ruleBulk";
+import { applyRulesToProducts, bulkRuleSummary, type BulkTarget } from "../../lib/ruleBulk";
 
 describe("[0] Google callback URL scheme", () => {
   const plist = read("ios/App/App/Info.plist");
@@ -98,8 +99,8 @@ describe("[1] white flash — 웹 첫 paint", () => {
 describe("[6] 회원 이름 표시", () => {
   it("합성 handle(소문자+숫자 8~24자)과 빈 값은 '이름 미등록', 실제 이름은 그대로", () => {
     for (const bad of ["92wr87mcz5", "user12345678", "", null, undefined, "회원", "(이름 없음)"]) {
-      expect(isSyntheticMemberName(bad as any)).toBe(true);
-      expect(displayMemberName(bad as any)).toBe(UNNAMED_MEMBER_LABEL);
+      expect(isSyntheticMemberName(bad)).toBe(true);
+      expect(displayMemberName(bad)).toBe(UNNAMED_MEMBER_LABEL);
     }
     for (const good of ["홍길동", "Kim Minsu", "John", "손지윤", "minsu", "abcdefgh"]) expect(displayMemberName(good)).toBe(good);
   });
@@ -159,7 +160,7 @@ describe("[7][8] 회원 검색/등록/목록", () => {
 });
 
 describe("[2] 수강권 예약조건 일괄 적용", () => {
-  const T = (id: string, extra: Partial<{ autoBookDays: number[] | null; existingRules: any[] }> = {}) => ({ id, name: `수강권${id}`, autoBookDays: null, existingRules: [], ...extra });
+  const T = (id: string, extra: Partial<{ autoBookDays: number[] | null; existingRules: BulkTarget["existingRules"] }> = {}) => ({ id, name: `수강권${id}`, autoBookDays: null, existingRules: [], ...extra });
   it("1개 / 여러 개 적용(요일 여러 개 = 요일별 규칙)", async () => {
     const add = vi.fn(async () => {});
     let r = await applyRulesToProducts([T("a")], { days: [1], startTime: "19:00", classTitle: "" }, add);

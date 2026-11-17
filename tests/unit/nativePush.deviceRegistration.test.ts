@@ -44,17 +44,17 @@ const pushMock = {
 // 테스트에서 개별적으로 직접 호출한다.
 let registrationListeners: ((token: { value: string }) => void)[] = [];
 let registrationErrorListeners: ((err: { error?: string }) => void)[] = [];
-let fakeToken = "fake-fcm-token-value-not-a-real-secret";
+const fakeToken = "fake-fcm-token-value-not-a-real-secret";
 
 vi.mock("@capacitor/push-notifications", () => ({
   PushNotifications: {
-    checkPermissions: (...a: any[]) => pushMock.checkPermissions(...(a as [])),
-    requestPermissions: (...a: any[]) => pushMock.requestPermissions(...(a as [])),
-    register: (...a: any[]) => {
-      pushMock.register(...(a as []));
+    checkPermissions: () => pushMock.checkPermissions(),
+    requestPermissions: () => pushMock.requestPermissions(),
+    register: () => {
+      pushMock.register();
       registrationListeners.forEach((cb) => cb({ value: fakeToken }));
     },
-    addListener: (event: string, cb: any) => {
+    addListener: (event: string, cb: (payload: { value?: string; error?: string }) => void) => {
       pushMock.addListener(event, cb);
       if (event === "registration") registrationListeners.push(cb);
       if (event === "registrationError") registrationErrorListeners.push(cb);
@@ -72,7 +72,7 @@ vi.mock("../../lib/supabaseClient", () => ({
     from: (table: string) => {
       supabaseMock.fromCalls.push(table);
       return {
-        upsert: (...a: any[]) => supabaseMock.upsert(...a),
+        upsert: (...a: unknown[]) => supabaseMock.upsert(...a),
         delete: () => ({ eq: () => ({ eq: () => Promise.resolve({ error: null }) }) }),
       };
     },

@@ -5,12 +5,12 @@
   체이닝 가능한 목(mock)으로 구성해 "새 컬럼 select 시 42703 → 컬럼 없이 재시도 → 성공"
   흐름을 재현한다.
 */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 
-function makeChain(finalResult: any) {
+function makeChain(finalResult: unknown) {
   // supabase-js 쿼리빌더는 체이닝 가능하면서(.select().eq()...) 그 자체로 await 가능한
   // thenable이다 — 실제 Promise 위에 체이닝 메서드(전부 자기 자신을 반환)만 얹어 흉내낸다.
-  const chain: any = Object.assign(Promise.resolve(finalResult), {});
+  const chain = Object.assign(Promise.resolve(finalResult), {} as { [m: string]: unknown });
   for (const m of ["select", "eq", "order", "in"]) chain[m] = vi.fn(() => chain);
   return chain;
 }
@@ -18,7 +18,7 @@ function makeChain(finalResult: any) {
 const MISSING_COLUMN = { code: "42703", message: 'column "weekday_selectable" does not exist' };
 
 describe("lib/passes.ts fetchProducts — 42703 방어", () => {
-  let fromMock: any;
+  let fromMock: Mock;
   beforeEach(() => { vi.resetModules(); });
 
   it("새 컬럼 select가 42703이면 컬럼 없이 재시도해서 목록을 정상 반환한다", async () => {
@@ -45,8 +45,8 @@ describe("lib/orders.ts createOrder — 42703 방어(주문 생성 자체는 막
   beforeEach(() => { vi.resetModules(); });
 
   it("selected_day_of_week 컬럼이 없어도(42703) 나머지 필드만으로 주문을 생성한다", async () => {
-    let insertedRows: any[] = [];
-    const insertMock = vi.fn((row: any) => {
+    const insertedRows: unknown[] = [];
+    const insertMock = vi.fn((row: unknown) => {
       insertedRows.push(row);
       const isFirstAttempt = insertedRows.length === 1;
       return {

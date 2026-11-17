@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const read = (p: string) => readFileSync(join(__dirname, "../..", p), "utf-8");
 
 // ---- 가짜 supabase: update 호출을 기록하고 테이블별 영향 행/오류를 주입한다
-type Upd = { table: string; patch: any; eq: [string, any][]; is: [string, any][] };
+type Upd = { table: string; patch: Record<string, unknown> | null; eq: [string, unknown][]; is: [string, unknown][] };
 const updates: Upd[] = [];
 let failTable: string | null = null;
 let zeroRowsTable: string | null = null;
@@ -14,12 +14,13 @@ vi.mock("../../lib/supabaseClient", () => ({
   supabase: {
     from: (table: string) => {
       const rec: Upd = { table, patch: null, eq: [], is: [] };
-      const chain: any = {
-        update(patch: any) { rec.patch = patch; updates.push(rec); return chain; },
-        eq(c: string, v: any) { rec.eq.push([c, v]); return chain; },
-        is(c: string, v: any) { rec.is.push([c, v]); return chain; },
+      interface Chain { update(patch: Record<string, unknown>): Chain; eq(c: string, v: unknown): Chain; is(c: string, v: unknown): Chain; select(): Chain; then(res: (v: unknown) => unknown): Promise<unknown> }
+      const chain: Chain = {
+        update(patch: Record<string, unknown>) { rec.patch = patch; updates.push(rec); return chain; },
+        eq(c: string, v: unknown) { rec.eq.push([c, v]); return chain; },
+        is(c: string, v: unknown) { rec.is.push([c, v]); return chain; },
         select() { return chain; },
-        then(res: any) {
+        then(res) {
           if (failTable === table) return Promise.resolve({ data: null, error: { message: "boom", code: "XX" } }).then(res);
           return Promise.resolve({ data: zeroRowsTable === table ? [] : [{ id: "row" }], error: null }).then(res);
         },
@@ -32,7 +33,7 @@ vi.mock("../../lib/supabaseClient", () => ({
 }));
 import { completeSocialName, completeSocialProfile } from "../../lib/authAccount";
 import { socialCompletionNeed } from "../../lib/memberName";
-import { applyRulesToProducts, bulkRuleSummary, preflightBulkRules } from "../../lib/ruleBulk";
+import { applyRulesToProducts, bulkRuleSummary, preflightBulkRules, type BulkTarget } from "../../lib/ruleBulk";
 
 beforeEach(() => { updates.length = 0; failTable = null; zeroRowsTable = null; });
 
@@ -55,7 +56,7 @@ describe("[1] 소셜 가입 마무리 gate", () => {
     expect(updates.map((u) => [u.table, u.patch])).toEqual([["profiles", { name: "홍길동" }], ["accounts", { name: "홍길동" }]]);
     expect(updates[0].eq).toEqual([["account_id", "acc1"], ["is_primary", true]]);
     expect(updates[0].is).toEqual([["deleted_at", null]]);   // 살아 있는 대표만
-    for (const u of updates) expect(Object.keys(u.patch)).toEqual(["name"]);
+    for (const u of updates) expect(Object.keys(u.patch!)).toEqual(["name"]);
   });
   it("저장 실패(오류/0행)는 성공 처리하지 않는다 — gate가 다시 나타나도록 throw", async () => {
     failTable = "profiles";
@@ -85,7 +86,7 @@ describe("[1] 소셜 가입 마무리 gate", () => {
 });
 
 describe("[2] 일괄 예약조건 — 부분 요일 적용 금지", () => {
-  const T = (id: string, autoBookDays: number[] | null = null, existingRules: any[] = []) => ({ id, name: `수강권${id}`, autoBookDays, existingRules });
+  const T = (id: string, autoBookDays: number[] | null = null, existingRules: BulkTarget["existingRules"] = []) => ({ id, name: `수강권${id}`, autoBookDays, existingRules });
   it("월+수 요청 / 월 고정 → write 0, 명시적 incompatible", async () => {
     const add = vi.fn(async () => {});
     const r = await applyRulesToProducts([T("a", [1])], { days: [1, 3], startTime: null, classTitle: null }, add);

@@ -27,7 +27,7 @@ describe("sanitizeNextPath — 로그인 후 이동 대상 검증", () => {
   });
   it("저장(stash)과 소비(consume) 양쪽에서 검증한다", async () => {
     const store = new Map<string, string>();
-    (globalThis as any).sessionStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) };
+    (globalThis as unknown as { sessionStorage?: unknown }).sessionStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) };
     const m = await import("../../lib/postLoginReturn");
     m.stashPostLoginNext("/\\evil.com"); expect(m.consumePostLoginNext()).toBeNull();
     m.stashPostLoginNext("/checkout?x=1"); expect(m.consumePostLoginNext()).toBe("/checkout?x=1");

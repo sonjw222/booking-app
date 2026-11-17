@@ -10,7 +10,7 @@ const rpcMock = vi.fn();
 vi.mock("../../lib/supabaseClient", () => ({ supabase: { rpc: (...a: unknown[]) => rpcMock(...a) } }));
 
 import {
-  addSlot, allSlots, countClasses, countPerDayClasses, makeSlot, nextSlotTimes, removeSlot, updateSlot, validateSlots, MAX_TIME_SLOTS,
+  addSlot, allSlots, countClasses, countPerDayClasses, nextSlotTimes, removeSlot, updateSlot, validateSlots, MAX_TIME_SLOTS,
 } from "../../lib/classTimeSlots";
 import {
   buildGroupUpdates, createClassOnDateSlots, createRecurringClasses, createRecurringClassesPerDay, expandRecurringDates,
@@ -21,10 +21,11 @@ const read = (p: string) => readFileSync(join(__dirname, "../..", p), "utf-8");
 const page = read("app/manager/classes/page.tsx");
 
 const base: ClassInput = { title: "정규반", description: "소개", date: "2026-10-10", start: "10:00", end: "11:00", capacity: 8, allowGoods: true, allowCancel: true, roomId: "r1", cancelDeadlineMin: 60, bookingDeadlineMin: null, classFormat: "group" };
-const rowsOf = () => rpcMock.mock.calls[0][1].p_rows as any[];
+type RpcRow = { start_time: string; end_time: string; capacity: number; [k: string]: unknown };
+const rowsOf = () => rpcMock.mock.calls[0][1].p_rows as RpcRow[];
 const hhmm = (iso: string) => iso.slice(11, 16);
 
-beforeEach(() => { rpcMock.mockReset(); rpcMock.mockImplementation(async (_n: string, args: any) => ({ data: (args.p_rows ?? []).map((_: unknown, i: number) => `id${i}`), error: null })); });
+beforeEach(() => { rpcMock.mockReset(); rpcMock.mockImplementation(async (_n: string, args: { p_rows?: unknown[] }) => ({ data: (args.p_rows ?? []).map((_: unknown, i: number) => `id${i}`), error: null })); });
 
 describe("[1~4] 슬롯 상태: 기본 1개, 추가, 삭제, 마지막 유지", () => {
   const first = { start: "10:00", end: "11:00" };
@@ -125,7 +126,7 @@ describe("[6][8][11] 반복 등록: 날짜 × 슬롯, 휴무일, 단일 타임 �
 });
 
 describe("[4-요일별][7][13] 요일별로 다르게 + 다중 타임", () => {
-  const perDay = (days: any[]) => ({ title: "정규반", fromDate: "2026-10-05", toDate: "2026-10-18", days });
+  const perDay = (days: Parameters<typeof createRecurringClassesPerDay>[1]["days"]) => ({ title: "정규반", fromDate: "2026-10-05", toDate: "2026-10-18", days });
   it("화 2타임 · 목 1타임: 요일마다 개수가 달라도 정확히 생성, 요일별 정원/룸 우선, 전체가 한 그룹", async () => {
     await createRecurringClassesPerDay("c1", perDay([
       { dow: 2, start: "10:00", end: "11:00", capacity: 8, roomId: "r1", slots: [{ start: "10:00", end: "11:00" }, { start: "14:00", end: "15:00" }] },

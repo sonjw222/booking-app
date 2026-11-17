@@ -12,9 +12,10 @@ import { notiPrefKeyForKind, getNotiPrefs, NOTI_PREF_STORAGE_KEY, NOTI_PREF_DEFA
 
 // vitest.config.ts는 environment: "node"라 브라우저 localStorage가 없다 — getNotiPrefs()는
 // 실제로는 브라우저에서만 호출되지만, 이 순수 폴백 로직 테스트를 위해 최소 스텁만 둔다.
-if (typeof (globalThis as any).localStorage === "undefined") {
+const g = globalThis as unknown as { localStorage?: unknown };
+if (typeof g.localStorage === "undefined") {
   const store = new Map<string, string>();
-  (globalThis as any).localStorage = {
+  g.localStorage = {
     getItem: (k: string) => (store.has(k) ? store.get(k)! : null),
     setItem: (k: string, v: string) => { store.set(k, v); },
     removeItem: (k: string) => { store.delete(k); },

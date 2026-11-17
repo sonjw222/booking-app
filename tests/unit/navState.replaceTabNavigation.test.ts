@@ -45,7 +45,7 @@ describe("replaceTabNavigation", () => {
     expect(e.preventDefault).toHaveBeenCalledTimes(1);
     expect(replaceSpy).toHaveBeenCalledWith("/manager");
 
-    // @ts-expect-error 원복
+    // @ts-expect-error location 재할당 원복
     window.location = originalLocation;
   });
 

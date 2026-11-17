@@ -1,11 +1,12 @@
 /*
   iOS 외부 Safari 결제 복귀(2026-10-02): 서명 return token / 발급·복귀 라우트 / 콜백 페이지·앱 복귀 계약. 실제 토스/DB를 호출하지 않는다.
 */
+import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mintReturnToken, verifyReturnToken, RETURN_TOKEN_TTL_SEC } from "../../lib/payments/server/returnToken";
-import { cancelForAuthorizedUid, checkReturnTokenEligibility, confirmForAuthorizedUid, handleConfirm, type LifecycleDeps } from "../../lib/payments/server/lifecycle";
+import { cancelForAuthorizedUid, checkReturnTokenEligibility, confirmForAuthorizedUid, handleConfirm, type LifecycleDeps, type OrderCtx } from "../../lib/payments/server/lifecycle";
 
 const read = (p: string) => readFileSync(join(__dirname, "../..", p), "utf-8");
 const SECRET = "test-secret-not-real";
@@ -28,7 +29,6 @@ describe("return token", () => {
     expect(verifyReturnToken(undefined, tok, "o1", now)).toMatchObject({ ok: false, reason: "no_secret" });
     for (const bad of ["", "abc", "a.b.c", null, 5]) expect(verifyReturnToken(SECRET, bad, "o1", now)).toMatchObject({ ok: false });
     const purposeBody = Buffer.from(JSON.stringify({ v: 1, oid: "o1", uid: "u1", exp: now + 99, p: "login" })).toString("base64url");
-    const { createHmac } = require("node:crypto");
     const sg = createHmac("sha256", SECRET).update(purposeBody).digest("base64url");
     expect(verifyReturnToken(SECRET, `${purposeBody}.${sg}`, "o1", now)).toMatchObject({ ok: false, reason: "wrong_purpose" });
     expect(() => mintReturnToken(undefined, { orderId: "o", uid: "u" })).toThrow();
@@ -39,23 +39,23 @@ describe("return token", () => {
   });
 });
 
-const order = { orderId: "o1", status: "pending", amount: 35000, provider: "toss" };
+const order: OrderCtx = { orderId: "o1", status: "pending", amount: 35000, provider: "toss" };
 function deps(over: Partial<LifecycleDeps> = {}) {
   const c = {
     tossConfirm: vi.fn(async () => ({ ok: true as const, data: { orderId: "o1", totalAmount: 35000 } })), tossCancel: vi.fn(async () => ({ ok: true as const, data: {} })),
-    tossGet: vi.fn(), dbConfirm: vi.fn(async () => ({ data: { membership_id: "m" }, error: null })), dbCancelOrder: vi.fn(async () => ({ data: {}, error: null })),
-    orderContext: vi.fn(async () => order as any), log: vi.fn(),
+    tossGet: vi.fn(async () => ({ ok: true as const, data: {} })), dbConfirm: vi.fn(async () => ({ data: { membership_id: "m" }, error: null })), dbCancelOrder: vi.fn(async () => ({ data: {}, error: null })),
+    orderContext: vi.fn(async (): Promise<OrderCtx | null> => order), log: vi.fn(),
   };
-  return { getAuthUid: async (t: string) => (t === "good" ? "u1" : null), gateAllows: async () => true, refundContext: vi.fn(), refundBegin: vi.fn(), refundRelease: vi.fn(), dbRefund: vi.fn(), ...c, ...over, calls: c } as any as LifecycleDeps & { calls: typeof c };
+  return { getAuthUid: async (t: string) => (t === "good" ? "u1" : null), gateAllows: async () => true, refundContext: vi.fn(async () => null), refundBegin: vi.fn(async () => ({ state: "locked" as const })), refundRelease: vi.fn(async () => ({ data: null, error: null })), dbRefund: vi.fn(async () => ({ data: null, error: null })), ...c, ...over, calls: c } satisfies LifecycleDeps & { calls: typeof c };
 }
 
 describe("발급 자격(checkReturnTokenEligibility)", () => {
   it("401 / 남의 주문 404 / non-toss 400 / non-pending 409 / gate OFF 403 / 정상", async () => {
-    expect((await checkReturnTokenEligibility({ token: null, orderId: "o1" }, deps())) as any).toMatchObject({ ok: false, reply: { status: 401 } });
-    expect((await checkReturnTokenEligibility({ token: "good", orderId: "o1" }, deps({ orderContext: vi.fn(async () => null) }))) as any).toMatchObject({ reply: { status: 404 } });
-    expect((await checkReturnTokenEligibility({ token: "good", orderId: "o1" }, deps({ orderContext: vi.fn(async () => ({ ...order, provider: "mock" })) }))) as any).toMatchObject({ reply: { status: 400 } });
-    expect((await checkReturnTokenEligibility({ token: "good", orderId: "o1" }, deps({ orderContext: vi.fn(async () => ({ ...order, status: "done" })) }))) as any).toMatchObject({ reply: { status: 409 } });
-    expect((await checkReturnTokenEligibility({ token: "good", orderId: "o1" }, deps({ gateAllows: async () => false }))) as any).toMatchObject({ reply: { status: 403 } });
+    expect((await checkReturnTokenEligibility({ token: null, orderId: "o1" }, deps()))).toMatchObject({ ok: false, reply: { status: 401 } });
+    expect((await checkReturnTokenEligibility({ token: "good", orderId: "o1" }, deps({ orderContext: vi.fn(async () => null) })))).toMatchObject({ reply: { status: 404 } });
+    expect((await checkReturnTokenEligibility({ token: "good", orderId: "o1" }, deps({ orderContext: vi.fn(async () => ({ ...order, provider: "mock" })) })))).toMatchObject({ reply: { status: 400 } });
+    expect((await checkReturnTokenEligibility({ token: "good", orderId: "o1" }, deps({ orderContext: vi.fn(async () => ({ ...order, status: "done" })) })))).toMatchObject({ reply: { status: 409 } });
+    expect((await checkReturnTokenEligibility({ token: "good", orderId: "o1" }, deps({ gateAllows: async () => false })))).toMatchObject({ reply: { status: 403 } });
     expect(await checkReturnTokenEligibility({ token: "good", orderId: "o1" }, deps())).toEqual({ ok: true, uid: "u1", orderId: "o1" });
   });
 });
@@ -83,7 +83,7 @@ describe("core 공유 — Bearer와 return 경로가 같은 안전 규칙", () =
 describe("routes", () => {
   afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.doUnmock("@supabase/supabase-js"); vi.resetModules(); });
   const mk = (path: string, body: object, headers: Record<string, string> = {}) => new Request(`http://localhost${path}`, { method: "POST", headers, body: JSON.stringify(body) });
-  function setup(rpc: (name: string) => any, override: boolean = false) {
+  function setup(rpc: (name: string) => unknown, override: boolean = false) {
     vi.resetModules();
     vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "x"); vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://x"); vi.stubEnv("TOSS_SECRET_KEY", "s"); vi.stubEnv("PAYMENT_RETURN_TOKEN_SECRET", SECRET);
     vi.stubEnv("NEXT_PUBLIC_PG_CHECKOUT_ENABLED", "true");
