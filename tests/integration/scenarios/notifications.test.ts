@@ -28,7 +28,6 @@ describe("SCN-P2-50: 예약 관련 알림 큐 생성(발송 아님)", () => {
   let memberAAccountId: string;
   let memberAProfileId: string;
   let memberBProfileId: string;
-  let memberCProfileId: string;
   let originalWaitlistWeeklyLimit: number | null = null;
   const pendingClassIds: string[] = [];
   const pendingMembershipIds: string[] = [];
@@ -50,8 +49,7 @@ describe("SCN-P2-50: 예약 관련 알림 큐 생성(발송 아님)", () => {
     const memberA = await loginMemberA();
     memberAAccountId = memberA.accountId;
     memberAProfileId = memberA.profileId;
-    const memberC = await memberCSubProfile(memberAAccountId);
-    memberCProfileId = memberC.profileId;
+    await memberCSubProfile(memberAAccountId);
 
     const memberB = await loginMemberB();
     memberBProfileId = memberB.profileId;

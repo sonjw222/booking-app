@@ -60,9 +60,6 @@ async function asManagerB() {
 async function asMember() {
   await switchToTestUser(MEMBER.email, MEMBER.password);
 }
-async function asMemberB() {
-  await switchToTestUser(MEMBER_B.email, MEMBER_B.password);
-}
 
 beforeAll(async () => {
   managerA = await switchToTestUser(MANAGER_A.email, MANAGER_A.password);

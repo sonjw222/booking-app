@@ -12,9 +12,9 @@
   만 사용한다 — 이미 이 저장소의 기존 결제 테스트(payment-lifecycle.test.ts 등)가
   쓰는 것과 동일한, 안전하게 확립된 경로.
 */
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { supabase } from "../../../lib/supabaseClient";
-import { getOrCreateOwnedTestCenter, cleanupTestClassAdmin, getFixtureAdminClient } from "../setup";
+import { getOrCreateOwnedTestCenter, getFixtureAdminClient } from "../setup";
 import { managerA as loginManagerA, memberA as loginMemberA, memberB as loginMemberB, memberCSubProfile, memberDSubProfile } from "./actors";
 import { runScenario } from "./reporter";
 import { loginConcurrentClient } from "./concurrentClient";
@@ -32,7 +32,6 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
   let memberBAccountId: string;
   let memberBProfileId: string;
   let memberCProfileId: string; // memberA의 서브프로필
-  let memberDProfileId: string; // memberB의 서브프로필
 
   const pendingProductIds: string[] = [];
   const pendingGradeIds: string[] = [];
@@ -56,8 +55,7 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
     const memberB = await loginMemberB();
     memberBAccountId = memberB.accountId;
     memberBProfileId = memberB.profileId;
-    const memberD = await memberDSubProfile(memberBAccountId);
-    memberDProfileId = memberD.profileId;
+    await memberDSubProfile(memberBAccountId);
   }, 90000);
 
   afterAll(async () => {
@@ -321,7 +319,7 @@ describe("MWHABIT Membership Visibility + Member Coupon Batch — 실제 라이�
   }, 60000);
 
   it("[24-6] 센터 격리 — centerA 매니저가 centerB의 등급/회원을 공개범위 대상으로 지정할 수 없다", async () => {
-    const managerA = await loginManagerA();
+    await loginManagerA();
     const productId = await makeProduct(centerAId, 10000, { type: "all" });
 
     // centerB의 등급을 만들어서, centerA 상품에 매핑을 시도한다(관리자 세션은 managerA로 유지).

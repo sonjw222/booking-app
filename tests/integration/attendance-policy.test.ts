@@ -37,7 +37,6 @@ let managerB: TestUser;
 let memberA: TestUser;
 let memberB: TestUser;
 let centerAId: string;
-let centerBId: string;
 let defaultSettings: CenterSettings;
 const createdClassIds: string[] = [];
 
@@ -56,7 +55,7 @@ beforeAll(async () => {
   managerA = await switchToTestUser(MANAGER_A.email, MANAGER_A.password);
   centerAId = await getOrCreateOwnedTestCenter(managerA);
   managerB = await switchToTestUser(MANAGER_B.email, MANAGER_B.password);
-  centerBId = await getOrCreateOwnedTestCenter(managerB);
+  await getOrCreateOwnedTestCenter(managerB);
   memberA = await switchToTestUser(MEMBER_A.email, MEMBER_A.password);
   memberB = await switchToTestUser(MEMBER_B.email, MEMBER_B.password);
 

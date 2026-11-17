@@ -7,7 +7,6 @@
   createIsolatedOwnedCenter 패턴을 그대로 채택).
 */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { supabase } from "../../lib/supabaseClient";
 import {
   switchToTestUser, getFixtureAdminClient, createFutureTestClass,
   type TestUser,
@@ -22,7 +21,6 @@ const MANAGER_B = { email: "TEST_MANAGER_B_EMAIL", password: "TEST_MANAGER_B_PAS
 const USER_B = { email: "TEST_USER_B_EMAIL", password: "TEST_USER_B_PASSWORD" };
 
 let managerA: TestUser;
-let managerB: TestUser;
 let userB: TestUser;
 let centerId: string;
 
@@ -131,7 +129,7 @@ async function createReservation(classId: string, profileId: string, membershipI
 beforeAll(async () => {
   managerA = await asManagerA();
   centerId = await createIsolatedCenter(managerA);
-  managerB = await asManagerB();
+  await asManagerB();
   userB = await asUserB();
   await asManagerA(); // 이후 admin 아닌 일반 supabase 클라이언트로 classes를 만들 수 있게 매니저 세션 유지
 }, 60000);

@@ -35,7 +35,6 @@ describe("SCN-P1-01/02/03/05/07/11: 예약 동시성/경쟁", () => {
   let centerAId: string;
   let memberAAccountId: string;
   let memberAProfileId: string;
-  let memberBAccountId: string;
   let memberBProfileId: string;
   let memberCProfileId: string;
   let originalWaitlistWeeklyLimit: number | null = null;
@@ -68,7 +67,6 @@ describe("SCN-P1-01/02/03/05/07/11: 예약 동시성/경쟁", () => {
     memberCProfileId = memberC.profileId;
 
     const memberB = await loginMemberB();
-    memberBAccountId = memberB.accountId;
     memberBProfileId = memberB.profileId;
   }, 60000);
 

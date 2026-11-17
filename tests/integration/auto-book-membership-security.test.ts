@@ -50,7 +50,6 @@ let managerA: TestUser;
 let managerB: TestUser;
 let userB: TestUser;
 let centerAId: string;
-let centerBId: string;
 
 const cleanupClassIds: string[] = [];
 const cleanupMembershipIds: string[] = [];
@@ -229,7 +228,7 @@ beforeAll(async () => {
   managerA = await asManagerA();
   centerAId = await getOrCreateOwnedTestCenter(managerA);
   managerB = await asManagerB();
-  centerBId = await getOrCreateOwnedTestCenter(managerB);
+  await getOrCreateOwnedTestCenter(managerB);
   userB = await asUserB();
 }, 60000);
 
@@ -319,7 +318,7 @@ describe("SEC-114 AUTO-SEC-A~E: 권한 경계", () => {
     const before = await fetchMembership(mem.id);
 
     await asUserB();
-    const { data, error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
+    const { error } = await supabase.rpc("auto_book_membership", { p_membership_id: mem.id });
     expect(error).not.toBeNull();
 
     const after = await fetchMembership(mem.id);
@@ -337,7 +336,7 @@ describe("SEC-114 AUTO-SEC-A~E: 권한 경계", () => {
     const before = await fetchMembership(mem.id);
 
     const anon = getAnonClient();
-    const { data, error } = await anon.rpc("auto_book_membership", { p_membership_id: mem.id });
+    const { error } = await anon.rpc("auto_book_membership", { p_membership_id: mem.id });
     expect(error).not.toBeNull();
 
     const after = await fetchMembership(mem.id);

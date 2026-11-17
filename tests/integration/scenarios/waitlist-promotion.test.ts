@@ -244,7 +244,7 @@ describe("SCN-P0-23/24/25: 대기 자동 승격", () => {
   }, 60000);
 
   it("SCN-P0-25: 대기 중인 회원이 스스로 취소해도 환급/승격 없이 정상 취소되고 나머지 대기자는 영향 없음", async () => {
-    const { classId, membershipA, membershipB, membershipC, membershipD } = await setupCapacity2Class();
+    const { classId, membershipA, membershipB, membershipD } = await setupCapacity2Class();
 
     await runScenario("SCN-P0-25", ["managerA", "memberA", "memberB", "memberC", "memberD"], async (assertions) => {
       await loginMemberA();
