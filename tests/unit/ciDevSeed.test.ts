@@ -1,15 +1,18 @@
-// @ts-nocheck — mjs 모듈 + 가짜 서버
 import { describe, expect, it } from "vitest";
 import { assertSeedAllowed, ensureCatalog, makeClient, projectRefFromUrl, scanUsage, selectCatalogRows } from "../../scripts/ci-dev/lib.mjs";
-import { runSeed } from "../../scripts/ci-dev/seed.mjs";
+import { runSeed as runSeedUntyped } from "../../scripts/ci-dev/seed.mjs";
 import { makeReporter, verifyCatalog, verifyFixtures, verifySchema, SEED_COLUMNS, CORE_TABLES } from "../../scripts/ci-dev/verify.mjs";
 import { REQUIRED_SECRET_NAMES } from "../../scripts/ci-dev/requiredEnv.mjs";
+
+// seed.mjs 는 JS(옵션 기본값 추론)라 fetchImpl 옵션이 타입에 없다 — 실제 계약대로 호출 시그니처만 선언.
+type SeedOptions = { fetchImpl?: typeof fetch; log?: (m: string) => void; writeMap?: boolean };
+const runSeed = runSeedUntyped as unknown as (env: Record<string, string>, o?: SeedOptions) => ReturnType<typeof runSeedUntyped>;
 
 const DEV = "https://devprojref123.supabase.co";
 const env = (o = {}) => { const e: Record<string, string> = { NEXT_PUBLIC_SUPABASE_URL: DEV, CI_DEV_TARGET_PROJECT_REF: "devprojref123", CI_DEV_SEED_ACK: "1", SUPABASE_SERVICE_ROLE_KEY: "svc" }; for (const n of REQUIRED_SECRET_NAMES) e[n] ??= n.endsWith("EMAIL") ? `${n.toLowerCase()}@example.com` : "x"; delete e.TEST_CENTER_ID; delete e.TEST_PRODUCT_ID; return { ...e, ...o }; };
 
 // 최소 가짜 Supabase: auth admin + PostgREST(eq 필터, insert) + openapi
-function fakeServer({ failOn = null, schema = true } = {}) {
+function fakeServer({ failOn = null, schema = true }: { failOn?: string | null; schema?: boolean } = {}) {
   const db: Record<string, Record<string, unknown>[]> = { users: [], accounts: [], profiles: [], centers: [], products: [], center_members: [], permissions: [], subscription_plans: [], service_categories: [], center_subscriptions: [] }; const calls: string[] = []; let n = 0; const id = () => `id-${++n}`;
   const f = async (url: string, init: { method?: string; body?: string } = {}) => {
     const u = new URL(url), method = init.method ?? "GET", body = init.body ? JSON.parse(init.body) : null; calls.push(`${method} ${u.pathname}`);
@@ -21,14 +24,14 @@ function fakeServer({ failOn = null, schema = true } = {}) {
     if (u.pathname === "/auth/v1/admin/users" && method === "POST") { const x = { id: id(), email: body.email, email_confirmed_at: "now" }; db.users.push(x); return res(200, x); }
     if (u.pathname.startsWith("/auth/v1/admin/users/") && method === "PUT") return res(200, {});
     if (u.pathname === "/storage/v1/bucket") return res(200, [{ name: "avatars" }]);
-    if (u.pathname === "/rest/v1/") return res(200, { definitions: schema ? Object.fromEntries([...CORE_TABLES, "x"].map((t) => [t, { properties: Object.fromEntries((SEED_COLUMNS[t] ?? ["id"]).map((c) => [c, {}])) }])) : {}, paths: {} });
+    if (u.pathname === "/rest/v1/") return res(200, { definitions: schema ? Object.fromEntries([...CORE_TABLES, "x"].map((t) => [t, { properties: Object.fromEntries(((SEED_COLUMNS as Record<string, string[]>)[t] ?? ["id"]).map((c) => [c, {}])) }])) : {}, paths: {} });
     const table = u.pathname.replace("/rest/v1/", "");
     if (method === "GET") { let rows = db[table] ?? []; for (const [k, v] of u.searchParams) { if (k === "select") continue; const m = String(v).match(/^eq\.(.*)$/); if (m) rows = rows.filter((r) => String(r[k]) === (m[1] === "true" ? "true" : m[1])); } return res(200, rows.map((r) => ({ ...r }))); }
     if (method === "POST") { const row = { id: id(), ...body }; db[table].push(row); return res(201, [{ id: row.id }]); }
     if (method === "PATCH") { const eq = [...u.searchParams].find(([k]) => k === "id"); const row = (db[table] ?? []).find((r) => `eq.${r.id}` === eq?.[1]); if (row) Object.assign(row, body); return res(200, row ? [{ id: row.id }] : []); }
     return res(404, {});
   };
-  return { f, db, calls };
+  return { f: f as unknown as typeof fetch, db, calls };
 }
 
 describe("assertSeedAllowed (네트워크 이전 3중 가드)", () => {
