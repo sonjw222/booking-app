@@ -29,6 +29,7 @@ import {
 import { createProduct, deleteProduct } from "../../lib/passes";
 import { addRoom, deleteRoom } from "../../lib/rooms";
 import { createClass, updateClass, deleteClass, setClassTrainers } from "../../lib/classes";
+import { errorMessage } from "../helpers/errorMessage";
 
 const MANAGER_A = { email: "TEST_MANAGER_A_EMAIL", password: "TEST_MANAGER_A_PASSWORD" };
 const MANAGER_B = { email: "TEST_MANAGER_B_EMAIL", password: "TEST_MANAGER_B_PASSWORD" };
@@ -80,8 +81,8 @@ beforeAll(async () => {
 
   try {
     await inviteStaff(centerAId, managerB.accountId, roleId);
-  } catch (e: any) {
-    if (!e.message.includes("이미 이 센터의 스태프")) throw e;
+  } catch (e) {
+    if (!errorMessage(e).includes("이미 이 센터의 스태프")) throw e;
   }
 
   const { data: mcRow, error: mcErr } = await supabase
@@ -91,7 +92,7 @@ beforeAll(async () => {
     .eq("account_id", managerB.accountId)
     .single();
   if (mcErr || !mcRow) throw new Error("스태프 행을 찾지 못했어요: " + mcErr?.message);
-  staffManagerCenterId = (mcRow as any).id;
+  staffManagerCenterId = mcRow!.id;
   // 방금 새로 초대된 경우에만 afterAll에서 제외(초대) 대상으로 기록 — 이미 있었다면 보존.
   createdStaffManagerCenterId = staffManagerCenterId;
 }, 30000);
@@ -101,20 +102,20 @@ afterAll(async () => {
   const errors: string[] = [];
 
   for (const id of createdClassIds) {
-    try { await deleteClass(id); } catch (e: any) { errors.push(`class 정리 실패(${id}): ${e.message}`); }
+    try { await deleteClass(id); } catch (e) { errors.push(`class 정리 실패(${id}): ${errorMessage(e)}`); }
   }
   if (createdProductId) {
-    try { await deleteProduct(createdProductId); } catch (e: any) { errors.push(`product 정리 실패: ${e.message}`); }
+    try { await deleteProduct(createdProductId); } catch (e) { errors.push(`product 정리 실패: ${errorMessage(e)}`); }
   }
   if (createdRoomId) {
-    try { await deleteRoom(createdRoomId); } catch (e: any) { errors.push(`room 정리 실패: ${e.message}`); }
+    try { await deleteRoom(createdRoomId); } catch (e) { errors.push(`room 정리 실패: ${errorMessage(e)}`); }
   }
-  try { await saveRolePermissions(roleId, []); } catch (e: any) { errors.push(`권한 리셋 실패: ${e.message}`); }
+  try { await saveRolePermissions(roleId, []); } catch (e) { errors.push(`권한 리셋 실패: ${errorMessage(e)}`); }
   if (createdStaffManagerCenterId) {
-    try { await removeStaff(createdStaffManagerCenterId); } catch (e: any) { errors.push(`스태프 정리 실패: ${e.message}`); }
+    try { await removeStaff(createdStaffManagerCenterId); } catch (e) { errors.push(`스태프 정리 실패: ${errorMessage(e)}`); }
   }
   if (createdRoleId) {
-    try { await deleteRole(createdRoleId); } catch (e: any) { errors.push(`역할 정리 실패: ${e.message}`); }
+    try { await deleteRole(createdRoleId); } catch (e) { errors.push(`역할 정리 실패: ${errorMessage(e)}`); }
   }
 
   if (errors.length > 0) {
@@ -162,7 +163,7 @@ describe("Bucket 2 RLS 실제 서버 거부/허용 — products/rooms", () => {
       .from("products").select("id")
       .eq("center_id", centerAId).eq("name", QA_PRODUCT_NAME)
       .order("created_at", { ascending: false }).limit(1).maybeSingle();
-    createdProductId = (data as any)?.id ?? null;
+    createdProductId = data?.id ?? null;
     expect(createdProductId).toBeTruthy();
   });
 
@@ -186,7 +187,7 @@ describe("Bucket 2 RLS 실제 서버 거부/허용 — products/rooms", () => {
       .from("rooms").select("id")
       .eq("center_id", centerAId).eq("name", QA_ROOM_NAME)
       .order("id", { ascending: false }).limit(1).maybeSingle();
-    createdRoomId = (data as any)?.id ?? null;
+    createdRoomId = data?.id ?? null;
     expect(createdRoomId).toBeTruthy();
   });
 });
