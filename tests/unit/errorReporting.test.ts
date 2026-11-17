@@ -82,7 +82,7 @@ describe("오류 화면 — 기록 + 복구", () => {
     // <html> 안은 DOM 구조상 div에 마운트할 수 없어 서버 렌더 문자열로 구조를 확인하고, 기록은 별도로 확인한다.
     return import("react-dom/server").then(({ renderToString }) => {
       const html = renderToString(h(GlobalError, { error: new Error("root layout failed"), reset }));
-      expect(html).toMatch(/^<html lang="ko">.*<body/s); expect(html).toContain("다시 시도");
+      expect(html).toMatch(/^<html lang="ko">[\s\S]*<body/); expect(html).toContain("다시 시도");
       expect(got).toHaveLength(0);   // effect는 클라이언트에서만 — 서버 렌더에서는 기록하지 않는다
     });
   });
