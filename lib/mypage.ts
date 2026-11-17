@@ -327,7 +327,7 @@ export async function fetchRepurchaseAvailability(
     supabase.from("centers").select("id, status").in("id", centerIds),
     productIds.length > 0
       ? supabase.from("products").select("id, is_active, is_on_sale").in("id", productIds)
-      : Promise.resolve({ data: [] as any[], error: null }),
+      : Promise.resolve({ data: [], error: null }),
   ]);
   if (centerErr) throw new Error("센터 상태를 확인하지 못했어요: " + centerErr.message);
   if (productErr) throw new Error("상품 상태를 확인하지 못했어요: " + productErr.message);

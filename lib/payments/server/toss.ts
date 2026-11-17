@@ -5,7 +5,7 @@
 */
 
 export type TossResult =
-  | { ok: true; data: any }
+  | { ok: true; data: Record<string, unknown> }
   | { ok: false; status: number; code: string | null; message: string };
 
 type FetchLike = typeof fetch;

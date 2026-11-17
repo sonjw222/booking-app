@@ -9,7 +9,7 @@
 import { supabase } from "./supabaseClient";
 import { isFullKrMobile } from "./krPhone";
 import { displayMemberName } from "./memberName";
-import { one } from "./embed";
+import { one, rowsOf } from "./embed";
 
 type StaffRoleEmbed = { id: string; name: string; is_owner: boolean };
 
@@ -151,7 +151,7 @@ export async function searchAccounts(centerId: string, phone: string): Promise<S
     if (error.code === "42883" || error.code === "PGRST202") throw new Error("스태프 검색 기능을 사용할 수 없어요. 앱/서버 업데이트 후 다시 시도해주세요");
     throw new Error(/권한|로그인|너무 많아요/.test(error.message ?? "") ? error.message : "계정 검색에 실패했어요: " + error.message);
   }
-  return ((data ?? []) as any[]).map((a) => ({
+  return rowsOf<{ account_id: string; name: string | null; phone: string | null; already_staff: boolean | null; staff_status: string | null }>(data).map((a) => ({
     id: a.account_id, name: displayMemberName(a.name), phone: a.phone ?? null,
     alreadyStaff: !!a.already_staff, staffStatus: a.staff_status ?? null,
   }));

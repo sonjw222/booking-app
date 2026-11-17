@@ -60,10 +60,10 @@ export async function fetchInquiryCenters(): Promise<SelectableCenter[]> {
     .in("profile_id", (await myProfileIds()));
   const seen = new Set<string>();
   const result: SelectableCenter[] = [];
-  for (const r of (mine ?? []) as any[]) {
+  for (const r of mine ?? []) {
     if (r.center_id && !seen.has(r.center_id)) {
       seen.add(r.center_id);
-      result.push({ id: r.center_id, name: r.centers?.name ?? "센터" });
+      result.push({ id: r.center_id, name: one<{ name: string }>(r.centers)?.name ?? "센터" });
     }
   }
   return result;
@@ -227,7 +227,7 @@ export function subscribeMessages(
     .on(
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "inquiry_messages", filter: `thread_id=eq.${threadId}` },
-      (payload) => onInsert(payload.new as any)
+      (payload) => onInsert(payload.new as Parameters<typeof onInsert>[0])
     )
     .subscribe();
   return () => { supabase.removeChannel(channel); };

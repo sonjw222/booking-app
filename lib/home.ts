@@ -297,14 +297,14 @@ export async function searchHome(keyword: string): Promise<{ centers: SearchCent
     : null;
   if (onlyReview && categoryQuery) categoryQuery = narrowToReviewCenters(categoryQuery, onlyReview);
 
-  const categoryResult = await (categoryQuery ?? Promise.resolve({ data: [] as any[], error: null }));
+  const categoryResult = await (categoryQuery ?? Promise.resolve({ data: [], error: null }));
   if (nameResult.error) throw new Error("검색에 실패했어요: " + nameResult.error.message);
   if (categoryResult.error) throw new Error("검색에 실패했어요: " + categoryResult.error.message);
 
   // 이름/종목 두 쿼리 모두에 걸리는 센터가 있을 수 있어(예: 센터명에 종목이 들어간
   // 경우) id 기준으로 중복 제거.
   const merged = new Map<string, SearchCenter>();
-  for (const c of [...(nameResult.data ?? []), ...(categoryResult.data ?? [])] as any[]) {
+  for (const c of [...(nameResult.data ?? []), ...(categoryResult.data ?? [])]) {
     if (!merged.has(c.id)) {
       merged.set(c.id, {
         id: c.id, name: c.name, categories: c.categories ?? [],

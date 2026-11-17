@@ -7,7 +7,23 @@
 import { omitKeys } from "./objectUtil";
 import type { CountTier } from "./selectableCount";
 import { supabase } from "./supabaseClient";
-import { one } from "./embed";
+import { one, queryOf, rowsOf } from "./embed";
+
+// payments 조회 행(임베드는 런타임상 객체/null — lib/embed.ts 참고).
+interface PaymentDbRow {
+  id: string; sale_type: string; card_amount: number; cash_amount: number; transfer_amount: number; point_amount: number;
+  direct_amount: number | null; total_amount: number; unpaid_amount: number; paid_at: string; memo: string | null;
+  profiles: { name: string } | null; accounts: { name: string } | null; memberships: { product_name: string } | null;
+}
+interface PointTxDbRow {
+  id: string; profile_id: string; amount: number; reason: string; created_at: string; profiles: { name: string } | null;
+}
+// products 조회 행(컬럼 폴백으로 select 문자열이 동적 — 구버전 DB에는 일부 열이 없다).
+interface SaleProductDbRow {
+  id: string; name: string; price: number; total_count: number | null; product_kind: string | null; unlimited?: boolean | null;
+  sizes?: string[] | null; is_on_sale?: boolean | null;
+  weekday_selectable?: boolean | null; time_selectable?: boolean | null; purchase_count_selectable?: boolean | null;
+}
 
 export const SALE_TYPE_LABEL: Record<string, string> = {
   new: "신규결제",
@@ -321,7 +337,7 @@ export async function fetchPayments(
   // (서버 설정은 NOT VERIFIED) .range() 페이지 반복으로 전부 가져온다. 1000건 이하이면 요청 1회로 기존과 동일.
   // 페이지 사이 순서가 흔들리지 않도록 동률 보조 정렬(id)을 추가했다.
   const PAGE_SIZE = 1000;
-  const data: any[] = [];
+  const data: PaymentDbRow[] = [];
   for (let start = 0; ; start += PAGE_SIZE) {
   const { data: page, error } = await supabase
     .from("payments")
@@ -355,7 +371,7 @@ export async function fetchPayments(
     .order("id", { ascending: false })
     .range(start, start + PAGE_SIZE - 1);
   if (error) throw new Error("매출 내역을 불러오지 못했어요: " + error.message);
-  data.push(...(page ?? []));
+  data.push(...rowsOf<PaymentDbRow>(page));
   if (!page || page.length < PAGE_SIZE) break;
   }
 
@@ -533,7 +549,7 @@ export async function fetchPoints(centerId: string): Promise<PointRow[]> {
   // 300건만으로 누적 잔액(balanceAfter)을 계산해 잔액 자체도 틀리게 나왔다.
   // lib/classes.ts의 fetchClasses()/lib/reservations.ts와 동일한 .range() 페이지
   // 단위 반복 조회로 바꿔 전체 거래를 빠짐없이 가져온다.
-  const rows: any[] = [];
+  const rows: PointTxDbRow[] = [];
   const PAGE_SIZE = 1000;
   for (let from = 0; ; from += PAGE_SIZE) {
     const { data: page, error } = await supabase
@@ -543,7 +559,7 @@ export async function fetchPoints(centerId: string): Promise<PointRow[]> {
       .order("created_at", { ascending: true })   // 오래된 것부터 → 누적 잔액 계산
       .range(from, from + PAGE_SIZE - 1);
     if (error) throw new Error("포인트 내역을 불러오지 못했어요: " + error.message);
-    rows.push(...(page ?? []));
+    rows.push(...rowsOf<PointTxDbRow>(page));
     if (!page || page.length < PAGE_SIZE) break;
   }
 
@@ -591,7 +607,7 @@ export async function fetchGrantableProducts(centerId: string, kind: "pass" | "g
     return q.order("created_at", { ascending: false });
   };
   // 컬럼 세트를 좁혀 가며 재시도(42703 = 미적용 SQL): 전체(선택형 포함) → 요일/시간 → 기본
-  let data: any[] | null = null;
+  let data: SaleProductDbRow[] | null = null;
   let error: { code?: string; message: string } | null = null;
   for (const cols of [
     `${base}, weekday_selectable, time_selectable, purchase_count_selectable`,
@@ -599,8 +615,7 @@ export async function fetchGrantableProducts(centerId: string, kind: "pass" | "g
     base,
   ]) {
     const res = await run(cols);
-    data = res.data as any[] | null;
-    error = res.error;
+    ({ data, error } = queryOf<SaleProductDbRow>(res));
     if (error?.code !== "42703") break;
   }
   if (error) throw new Error("상품을 불러오지 못했어요: " + error.message);
@@ -637,8 +652,7 @@ export async function fetchSaleProducts(centerId: string): Promise<SaleProduct[]
     .eq("is_active", true)
     .eq("is_on_sale", true)
     .order("created_at", { ascending: false });
-  let data: any[] | null = first.data;
-  let error = first.error;
+  let { data, error } = queryOf<SaleProductDbRow>(first);
   if (error?.code === "42703") {
     const fallback = await supabase
       .from("products")
@@ -647,8 +661,7 @@ export async function fetchSaleProducts(centerId: string): Promise<SaleProduct[]
       .eq("is_active", true)
       .eq("is_on_sale", true)
       .order("created_at", { ascending: false });
-    data = fallback.data;
-    error = fallback.error;
+    ({ data, error } = queryOf<SaleProductDbRow>(fallback));
   }
   if (error) throw new Error("상품을 불러오지 못했어요: " + error.message);
   return (data ?? []).map((p) => ({

@@ -10,7 +10,7 @@ import { MAX_PROGRESS_DEPTH, checkParentChange } from "./progressTree";
 
 import type { NodeType } from "./progressTree";
 import { omitKeys } from "./objectUtil";
-import { one } from "./embed";
+import { one, queryOf } from "./embed";
 
 type CategoryEmbed = { name: string; parent_id: string | null };
 
@@ -23,16 +23,19 @@ export type ProgressCategory = {
 };
 
 // 센터의 전체 항목(분류+기술, 평면). node_type 컬럼이 아직 없는 DB(SQL 미적용, 42703)에서는 옛 구조(최상위=분류, 그 아래=기술)로 읽는다 — 읽기 전용 호환일 뿐 새 화면의 의미 추론이 아니다.
+// progress_categories 조회 행(node_type은 SQL 미적용 DB에서 빠진다).
+interface ProgressCategoryRow { id: string; parent_id: string | null; name: string; sort_order: number; node_type?: NodeType }
+
 export async function fetchCategories(centerId: string): Promise<ProgressCategory[]> {
-  let res: { data: any[] | null; error: { code?: string; message: string } | null } = await supabase
+  let res = queryOf<ProgressCategoryRow>(await supabase
     .from("progress_categories")
     .select("id, parent_id, name, sort_order, node_type")
     .eq("center_id", centerId)
-    .order("sort_order");
+    .order("sort_order"));
   let legacy = false;
   if (res.error && res.error.code === "42703") {
     legacy = true;
-    res = await supabase.from("progress_categories").select("id, parent_id, name, sort_order").eq("center_id", centerId).order("sort_order");
+    res = queryOf<ProgressCategoryRow>(await supabase.from("progress_categories").select("id, parent_id, name, sort_order").eq("center_id", centerId).order("sort_order"));
   }
   if (res.error) throw new Error("기술 목록을 불러오지 못했어요: " + res.error.message);
   return (res.data ?? []).map((c) => ({
@@ -111,10 +114,6 @@ export async function deleteCategory(id: string): Promise<void> {
    - 강사가 회원별로 "오늘 가르친 기술"을 체크
    - 회원의 진도 이력 조회
    ============================================================ */
-
-const KST_MD = new Intl.DateTimeFormat("ko-KR", {
-  timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit",
-});
 
 // 진도 기록 한 건 (하루에 여러 기술)
 export type ProgressRecord = {

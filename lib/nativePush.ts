@@ -302,7 +302,6 @@ function showForegroundPushBanner(title: string, body: string, onTap: () => void
   el.appendChild(dot);
   el.appendChild(textWrap);
 
-  let dismissTimer: ReturnType<typeof setTimeout>;
   const dismiss = () => {
     clearTimeout(dismissTimer);
     el.classList.remove("is-visible");
@@ -318,7 +317,7 @@ function showForegroundPushBanner(title: string, body: string, onTap: () => void
   foregroundBannerEl = el;
   // 붙인 직후 바로 클래스를 주면 transition이 안 먹을 수 있어(같은 프레임) 한 틱 뒤로 미룬다.
   requestAnimationFrame(() => el.classList.add("is-visible"));
-  dismissTimer = setTimeout(dismiss, 4000);
+  const dismissTimer = setTimeout(dismiss, 4000);
 }
 
 // 앱 부팅 시 CapacitorBootstrap에서 registerNativePushTapHandler와 함께 1회만 등록한다.

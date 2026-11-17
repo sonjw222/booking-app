@@ -7,6 +7,7 @@
 */
 
 import { omitKeys } from "./objectUtil";
+import { queryOf, rowsOf } from "./embed";
 import type { CountTier } from "./selectableCount";
 import { supabase } from "./supabaseClient";
 
@@ -77,9 +78,25 @@ const PRODUCTS_SELECT_FULL = `${PRODUCTS_SELECT_WEEKDAY}, purchase_count_selecta
 // memberships.sql이 아직 실행되지 않은 환경(42703, 컬럼 없음)에서도 이 목록 조회 자체가
 // 깨지지 않도록 방어적으로 재시도한다(lib/rooms.ts의 detail_address와 동일 패턴) — 이
 // 함수는 수업/체크아웃/상품관리/매출 등 거의 전 화면이 쓰는 핵심 경로라 특히 중요하다.
+// products 조회 행(컬럼 폴백으로 select 문자열이 동적 — 구버전 DB에는 일부 열이 없다).
+interface ProductRow {
+  id: string; name: string; price: number; pass_type: Product["passType"]; total_count: number | null; is_on_sale: boolean;
+  product_kind: Product["kind"]; unlimited: boolean; unlimited_pass: boolean;
+  expiry_mode: ExpiryMode; expiry_days: number | null; expiry_date: string | null;
+  rolling_month_cutoff_day?: number | null; rolling_month_allow_early_use?: boolean | null;
+  description?: string | null; sizes?: string[] | null; auto_book_days?: number[] | null; group_label?: string | null;
+  max_quantity?: number | null; visibility_type?: ProductVisibility["type"] | null; coupon_eligible?: boolean | null;
+  weekday_selectable?: boolean | null; time_selectable?: boolean | null; purchase_count_selectable?: boolean | null;
+}
+
+// fetch_public_product_schedule_rules RPC 응답 행.
+interface PublicRuleRow {
+  product_id: string; day_of_week: number | null; start_time: string | null; class_title: string | null;
+}
+
 export async function fetchProducts(centerId: string, kind: "pass" | "goods" = "pass"): Promise<Product[]> {
   // 컬럼 세트를 좁혀 가며 재시도(42703 = 아직 미적용 SQL의 컬럼 없음): 전체 → 요일/시간까지 → 기본
-  let data: any[] | null = null;
+  let data: ProductRow[] | null = null;
   let error: { code?: string; message: string } | null = null;
   for (const cols of [PRODUCTS_SELECT_FULL, PRODUCTS_SELECT_WEEKDAY, PRODUCTS_SELECT_BASE]) {
     const res = await supabase
@@ -89,8 +106,7 @@ export async function fetchProducts(centerId: string, kind: "pass" | "goods" = "
       .eq("is_active", true)
       .eq("product_kind", kind)
       .order("created_at", { ascending: false });
-    data = res.data as any[] | null;
-    error = res.error;
+    ({ data, error } = queryOf<ProductRow>(res));
     if (error?.code !== "42703") break;
   }
   if (error) throw new Error("상품을 불러오지 못했어요: " + error.message);
@@ -100,7 +116,7 @@ export async function fetchProducts(centerId: string, kind: "pass" | "goods" = "
   // 판매 수량 제한이 걸린 상품만 판매 개수를 조회 (add_product_sale_limit.sql의 뷰,
   // 개인정보 없는 집계라 별도 권한 체크 불필요 — class_reservation_counts와 동일 패턴)
   const limitedIds = rows.filter((p) => p.max_quantity != null).map((p) => p.id);
-  let soldByProduct: Record<string, number> = {};
+  const soldByProduct: Record<string, number> = {};
   if (limitedIds.length > 0) {
     const { data: counts, error: countErr } = await supabase
       .from("product_sale_counts")
@@ -437,7 +453,7 @@ export async function fetchRulesForProducts(productIds: string[]): Promise<Recor
     .order("created_at");
   if (error) throw new Error("예약조건을 불러오지 못했어요: " + error.message);
   const out: Record<string, ScheduleRule[]> = {};
-  for (const r of (data ?? []) as any[]) {
+  for (const r of data ?? []) {
     (out[r.product_id] ??= []).push({
       id: r.id,
       dayOfWeek: r.day_of_week,
@@ -473,7 +489,7 @@ export async function fetchDisplayRulesForProducts(
   const { data, error } = await supabase.rpc("fetch_public_product_schedule_rules", { p_center_id: centerId });
   if (error) return { rules: {}, failed: true };
   const rules: Record<string, ScheduleRule[]> = {};
-  for (const r of (data ?? []) as any[]) {
+  for (const r of rowsOf<PublicRuleRow>(data)) {
     if (!visible.has(r.product_id)) continue;
     (rules[r.product_id] ??= []).push({
       id: `${r.product_id}:${r.day_of_week ?? "x"}:${r.start_time ?? "x"}:${r.class_title ?? "x"}`,

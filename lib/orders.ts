@@ -398,15 +398,17 @@ export async function fetchMyPurchases(): Promise<PurchaseItem[]> {
   const memCols = "id, center_id, product_id, product_name, total_count, remaining_count, expires_at, starts_at, status, created_at, centers(name), products(product_kind, unlimited, unlimited_pass)";
   const runMem = (cols: string) => supabase.from("memberships").select(cols)
     .in("profile_id", profileIds).order("created_at", { ascending: false }).limit(100);
-  let { data: mems, error: memsErr } = queryOf<PurchaseMembershipRow>(await runMem(`${memCols}, selected_size`));
-  if (memsErr?.code === "42703") ({ data: mems } = queryOf<PurchaseMembershipRow>(await runMem(memCols)));
+  const memsFirst = queryOf<PurchaseMembershipRow>(await runMem(`${memCols}, selected_size`));
+  let mems = memsFirst.data;
+  if (memsFirst.error?.code === "42703") mems = queryOf<PurchaseMembershipRow>(await runMem(memCols)).data;
 
   // 주문 (아직 발급 안 된 것 포함)
   const ordCols = "id, center_id, product_name, amount, status, created_at, centers(name)";
   const runOrd = (cols: string) => supabase.from("orders").select(cols)
     .in("profile_id", profileIds).order("created_at", { ascending: false }).limit(100);
-  let { data: ords, error: ordsErr } = queryOf<OrderRow>(await runOrd(`${ordCols}, selected_count, selected_size`));
-  if (ordsErr?.code === "42703") ({ data: ords } = queryOf<OrderRow>(await runOrd(ordCols)));
+  const ordsFirst = queryOf<OrderRow>(await runOrd(`${ordCols}, selected_count, selected_size`));
+  let ords = ordsFirst.data;
+  if (ordsFirst.error?.code === "42703") ords = queryOf<OrderRow>(await runOrd(ordCols)).data;
 
   const out: PurchaseItem[] = [];
   const origins = await fetchMembershipOrigins((mems ?? []).map((m: { id: string }) => m.id));

@@ -117,7 +117,7 @@ export async function updateProfile(profileId: string, edit: ProfileEdit): Promi
   const { data: before } = await supabase.from("profiles").select("avatar_url").eq("id", profileId).maybeSingle();
   const previousAvatarUrl = before?.avatar_url ?? null;
 
-  const patch: any = {
+  const patch: Record<string, string | null> = {
     nickname: edit.nickname || null,
     label: edit.label || null,
     birth_date: edit.birthDate || null,

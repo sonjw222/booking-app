@@ -5,6 +5,25 @@
 */
 
 import { supabase } from "./supabaseClient";
+import { rowsOf } from "./embed";
+
+// fetchMonthData가 읽는 행들(select 문자열에 나열한 열; 임베드는 런타임상 객체/null — lib/embed.ts 참고).
+interface MyMembershipLiteRow {
+  id: string; center_id: string; remaining_count: number | null; expires_at: string | null; status: string;
+}
+interface MonthClassRow {
+  id: string; center_id: string; title: string; description: string | null; start_time: string; end_time: string; capacity: number;
+  allow_goods: boolean | null; allow_cancel: boolean | null; class_format: string | null; room_id: string | null;
+  centers: { id: string; name: string; categories: string[] } | null;
+  rooms: unknown;
+  booking_deadline_min?: number | null;
+}
+// usable_memberships_for_classes RPC 응답 행(add_usable_memberships_issued_at_draft_proposed.sql 적용 전에는 issued_at 없음).
+interface UsableMembershipRow {
+  class_id: string; membership_id: string; product_name: string; remaining_count: number | null; expires_at: string | null;
+  owner_profile?: string | null; is_mine?: boolean | null; issued_at?: string | null;
+}
+interface PurchasableProductRow { id: string; name: string; price: number; product_kind: string | null; center_id: string; is_active: boolean; is_on_sale: boolean }
 import { getKstMonthUtcRange } from "./kst";
 import { getMyAccountId as getMyAccountIdBase } from "./authAccount";
 import { appendTrainerNames } from "./instructorDisplay";
@@ -107,7 +126,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   // 보유하면(공유 테스트 계정에서 실제로 재현됨) 1000번째 이후 행이 잘려, 그 안에만 있던
   // 센터가 myMembershipCenters에서 통째로 빠지고 그 센터의 수업이 전부 회원 화면에서
   // 안 보이게 된다. .range()로 페이지 단위 반복 조회한다.
-  const myMems: any[] = [];
+  const myMems: MyMembershipLiteRow[] = [];
   {
     const PAGE_SIZE = 1000;
     for (let from = 0; ; from += PAGE_SIZE) {
@@ -151,7 +170,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
         .from("center_settings").select("center_id, show_all_classes").in("center_id", membershipCenterIds))()
     : null;
   settingsPromise?.catch(() => { /* 수업 조회가 먼저 throw하면 이 결과는 쓰이지 않음 — unhandled rejection 방지 */ });
-  const classRows: any[] = [];
+  const classRows: MonthClassRow[] = [];
   if (membershipCenterIds.length > 0) {
     const PAGE_SIZE = 1000;
     for (let from = 0; ; from += PAGE_SIZE) {
@@ -164,7 +183,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
         .order("start_time")
         .range(from, from + PAGE_SIZE - 1);
       if (clsErr) throw new Error("수업 목록을 불러오지 못했어요: " + clsErr.message);
-      classRows.push(...(page ?? []));
+      classRows.push(...rowsOf<MonthClassRow>(page));
       if (!page || page.length < PAGE_SIZE) break;
     }
   }
@@ -231,10 +250,10 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   const classIds = filteredClassRows.map((c) => c.id);
 
   // 수업별 확정/대기 인원수 (개인정보 없는 집계 뷰에서 조회)
-  let reservedCount: Record<string, number> = {};
-  let waitlistedCount: Record<string, number> = {};
+  const reservedCount: Record<string, number> = {};
+  const waitlistedCount: Record<string, number> = {};
   // 내 예약 (프로필별로 구분). key = `${classId}:${profileId}`
-  let myByClassProfile: Record<string, { id: string; status: "confirmed" | "waitlisted" }> = {};
+  const myByClassProfile: Record<string, { id: string; status: "confirmed" | "waitlisted" }> = {};
   // 수업별 담당 강사 이름. key = classId
   const instructorNamesByClass: Record<string, string[]> = {};
 
@@ -440,7 +459,7 @@ export async function fetchMyGoodsByCenter(
   if (error) throw new Error("상품을 불러오지 못했어요: " + error.message);
   const today = todayKstYmd();
   const out: Record<string, MyGoods[]> = {};
-  for (const m of (data ?? []) as any[]) {
+  for (const m of rowsOf<{ id: string; center_id: string; product_name: string; remaining_count: number | null; expires_at: string | null; products: { product_kind: string | null; unlimited: boolean | null } | null }>(data)) {
     if (m.products?.product_kind !== "goods") continue;
     if (!(m.products?.unlimited || (m.remaining_count ?? 0) > 0)) continue;
     if (m.expires_at && m.expires_at < today) continue;
@@ -521,7 +540,7 @@ export async function fetchUsableMembershipsByClass(
   // 전부 합치면 PostgREST 기본 응답 행 수 제한(1000행)에 걸릴 수 있다(fetchClasses에서 실제로
   // 재현된 것과 같은 종류의 문제 — 이번엔 공유 테스트 계정에 pass가 200개 넘게 누적돼 실제로
   // 재현됨: 특정 pass 하나가 응답에서 통째로 잘려 목록에 안 보이는 버그로 나타났다).
-  const rows: any[] = [];
+  const rows: UsableMembershipRow[] = [];
   const PAGE_SIZE = 1000;
   for (let from = 0; ; from += PAGE_SIZE) {
     const { data: page, error } = await supabase
@@ -532,7 +551,7 @@ export async function fetchUsableMembershipsByClass(
     if (!page || page.length < PAGE_SIZE) break;
   }
   const out: Record<string, UsableMembership[]> = {};
-  for (const r of rows as any[]) {
+  for (const r of rows) {
     (out[r.class_id] ??= []).push({
       membershipId: r.membership_id,
       productName: r.product_name,
@@ -600,13 +619,13 @@ export async function fetchPurchasableProductsByClass(
 
   const today = todayKstYmd();
   const ownedProductIds = new Set<string>();
-  for (const m of (ownedRes.data ?? []) as any[]) {
+  for (const m of rowsOf<{ product_id: string | null; remaining_count: number | null; expires_at: string | null }>(ownedRes.data)) {
     if (!m.product_id) continue;
     const active = (m.remaining_count == null || m.remaining_count > 0) && (!m.expires_at || m.expires_at >= today);
     if (active) ownedProductIds.add(m.product_id);
   }
 
-  const toProduct = (p: any): PurchasableProduct => ({
+  const toProduct = (p: { id: string; name: string; price: number; product_kind: string | null }): PurchasableProduct => ({
     productId: p.id,
     productName: p.name,
     price: p.price,
@@ -616,7 +635,7 @@ export async function fetchPurchasableProductsByClass(
   // 수업별 "지정된 상품" 목록 (없으면 미지정 = 전체 허용으로 아래에서 처리)
   const restrictedByClass: Record<string, PurchasableProduct[]> = {};
   const hasRestriction = new Set<string>();
-  for (const l of (linksRes.data ?? []) as any[]) {
+  for (const l of rowsOf<{ class_id: string; products: PurchasableProductRow | null }>(linksRes.data)) {
     hasRestriction.add(l.class_id);
     const p = l.products;
     if (!p) continue;
@@ -629,7 +648,7 @@ export async function fetchPurchasableProductsByClass(
 
   // 센터별 "판매중인 전체 상품" 목록 (지정 없는 수업에 사용)
   const allByCenter: Record<string, PurchasableProduct[]> = {};
-  for (const p of (allProductsRes.data ?? []) as any[]) {
+  for (const p of rowsOf<PurchasableProductRow>(allProductsRes.data)) {
     if (ownedProductIds.has(p.id)) continue;
     (allByCenter[p.center_id] ??= []).push(toProduct(p));
   }

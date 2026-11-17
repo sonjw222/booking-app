@@ -212,7 +212,7 @@ export async function fetchCenterReviewsForManager(centerId: string): Promise<Ma
 export async function fetchReviewStats(centerId: string): Promise<ReviewStats> {
   const { data, error } = await supabase.rpc("center_review_stats", { p_center_id: centerId });
   if (error) return { total: 0, avgRating: 0, noReply: 0 };
-  const r = (data ?? [])[0] as any;
+  const r = (data ?? [])[0] as { total?: number | string; avg_rating?: number | string; no_reply?: number | string } | undefined;
   return {
     total: Number(r?.total ?? 0),
     avgRating: Number(r?.avg_rating ?? 0),
