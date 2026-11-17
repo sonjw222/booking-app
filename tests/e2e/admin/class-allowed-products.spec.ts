@@ -121,7 +121,7 @@ test.beforeAll(async () => {
   const { data: existingForeignCenter } = await admin
     .from("centers").select("id").eq("name", "P3 타센터-격리테스트").maybeSingle();
   if (existingForeignCenter) {
-    foreignCenterCleanup.centerId = (existingForeignCenter as any).id;
+    foreignCenterCleanup.centerId = existingForeignCenter.id;
   } else {
     const { data: foreignCenter, error: fcErr } = await admin
       .from("centers").insert({ name: "P3 타센터-격리테스트", status: "approved" }).select("id").single();
@@ -131,7 +131,7 @@ test.beforeAll(async () => {
   const { data: existingForeignProduct } = await admin
     .from("products").select("id").eq("center_id", foreignCenterCleanup.centerId).eq("name", "P3 타센터전용패스").maybeSingle();
   if (existingForeignProduct) {
-    foreignCenterCleanup.productId = (existingForeignProduct as any).id;
+    foreignCenterCleanup.productId = existingForeignProduct.id;
   } else {
     const { data: foreignProduct, error: fpErr } = await admin
       .from("products")

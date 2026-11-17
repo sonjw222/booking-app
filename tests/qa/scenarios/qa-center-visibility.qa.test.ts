@@ -33,7 +33,7 @@ describe("QA 센터: approved + 일반 사용자에게 숨김", () => {
     expect(rpc.error).toBeNull();
     expect(rpc.data ?? []).toHaveLength(0);
     const all = await c.rpc("fetch_public_storefront_products", { p_center_id: null });
-    expect((all.data ?? []).some((p: any) => p.center_id === state.centerId)).toBe(false);
+    expect((all.data ?? []).some((p: { center_id: string }) => p.center_id === state.centerId)).toBe(false);
   });
 
   it("QA 센터와 관계없는 일반 로그인 계정(TEST_USER_B)은 센터 목록·상세·상품·구매 RPC에서 못 본다", async () => {
@@ -44,7 +44,7 @@ describe("QA 센터: approved + 일반 사용자에게 숨김", () => {
     const rpc = await supabase.rpc("fetch_purchasable_products", { p_center_id: state.centerId });
     expect(rpc.data ?? []).toHaveLength(0);
     const list = await supabase.from("centers").select("id").eq("status", "approved");
-    expect((list.data ?? []).some((c: any) => c.id === state.centerId)).toBe(false);
+    expect((list.data ?? []).some((c) => c.id === state.centerId)).toBe(false);
   });
 
   it("QA 매니저는 fetchMyCenters에서 QA 센터를 조회할 수 있다", async () => {

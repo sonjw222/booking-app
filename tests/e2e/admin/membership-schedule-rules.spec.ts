@@ -263,7 +263,7 @@ test("J(F2 정책): 방금 새로 발급된 membership도 예약조건 불일치
   const { data: oldMems } = await admin
     .from("memberships").select("id")
     .eq("profile_id", userA.profileId).eq("product_id", restrictedPass.id);
-  const oldMemIds = (oldMems ?? []).map((m: any) => m.id as string);
+  const oldMemIds = (oldMems ?? []).map((m) => m.id as string);
   if (oldMemIds.length > 0) {
     await admin.from("reservations").delete().in("membership_id", oldMemIds);
     await admin.from("memberships").delete().in("id", oldMemIds);

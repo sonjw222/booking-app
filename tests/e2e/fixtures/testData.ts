@@ -219,7 +219,7 @@ export async function cleanupTodaysReservationsForProfile(centerId: string, prof
     .gte("start_time", dayStartUtc)
     .lte("start_time", dayEndUtc);
   if (clsErr) throw new Error(`오늘 수업 조회 실패: ${clsErr.message}`);
-  const classIds = (classRows ?? []).map((c: any) => c.id as string);
+  const classIds = (classRows ?? []).map((c) => c.id as string);
   if (classIds.length === 0) return;
 
   const { error: delErr } = await admin

@@ -86,7 +86,7 @@ test("요일별 개별 지정(perDayMode) 반복수업 등록 — RPC 1회로 �
   const { data: holidayRows } = await admin
     .from("center_holidays").select("holiday_date").eq("center_id", centerAId)
     .gte("holiday_date", fromDate).lte("holiday_date", toDate);
-  const holidays = new Set((holidayRows ?? []).map((h: any) => h.holiday_date as string));
+  const holidays = new Set((holidayRows ?? []).map((h) => h.holiday_date as string));
   const expectedDatesA = expandRecurringDates(fromDate, toDate, [dowA]).filter((d) => !holidays.has(d));
   const expectedDatesB = expandRecurringDates(fromDate, toDate, [dowB]).filter((d) => !holidays.has(d));
   test.skip(expectedDatesA.length === 0 || expectedDatesB.length === 0, "선택한 2주 범위가 전부 휴무일이라 이 실행에서는 검증 불가");
