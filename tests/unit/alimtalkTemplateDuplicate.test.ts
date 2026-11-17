@@ -3,10 +3,11 @@ import { describe, expect, it, vi } from "vitest";
 // DB unique index 위반(23505)은 친절한 한국어 메시지로, 그 외 오류는 기존 접두어 유지.
 let result: { data: unknown; error: { code?: string; message: string } | null } = { data: { id: "t1" }, error: null };
 vi.mock("../../lib/supabaseClient", () => {
-  const chain: any = {
+  interface Chain { insert: () => Chain; update: () => Chain; eq: () => Chain; select: () => Chain; single: () => Promise<unknown>; then: (res: (v: unknown) => unknown) => Promise<unknown> }
+  const chain: Chain = {
     insert: () => chain, update: () => chain, eq: () => chain, select: () => chain,
     single: async () => result,
-    then: (res: any) => Promise.resolve(result).then(res),
+    then: (res) => Promise.resolve(result).then(res),
   };
   return { supabase: { from: () => chain } };
 });
