@@ -25,7 +25,7 @@ export async function fetchMarketingMessages(): Promise<MarketingMessage[]> {
     .select("id, title, body, link, created_at, target_count")
     .order("created_at", { ascending: false });
   if (error) throw new Error("발송 내역을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((m: any) => ({
+  return (data ?? []).map((m) => ({
     id: m.id, title: m.title, body: m.body, link: m.link,
     createdAt: m.created_at, targetCount: m.target_count,
   }));

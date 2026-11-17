@@ -22,7 +22,7 @@ for (const [vn, vp] of Object.entries(VPS)) for (const [tn, tk] of Object.entrie
   await go("/products"); rec("public-products", seen(await T()));
   for (const [lbl, id] of [["review", REV], ["op", OP], ["toss", TOSS]]) { await go("/center/" + id); const t = await T(); rec("center-" + lbl, { shown: !/찾을 수 없|존재하지/.test(t) && t.length > 80 }); if (lbl === "review") await shot("center-review"); }
   if (cred) {
-    for (const [lbl, c, p] of [["review", REV, REVP], ["op", OP, OPP], ["toss", TOSS, TOSSP]]) { await go(`/checkout?center=${c}&product=${p}`); const m = (await page.locator(".pay-method").allInnerTexts()).map((s) => s.replace(/\s+/g, " ").replace(/[●○]/g, "").trim()); const t = await T(); rec("checkout-" + lbl, { methods: m, hasPeriod: await page.getByTestId("service-period").count() > 0, blocked: m.length === 0 }); if (lbl === "review") await shot("checkout-review"); }
+    for (const [lbl, c, p] of [["review", REV, REVP], ["op", OP, OPP], ["toss", TOSS, TOSSP]]) { await go(`/checkout?center=${c}&product=${p}`); const m = (await page.locator(".pay-method").allInnerTexts()).map((s) => s.replace(/\s+/g, " ").replace(/[●○]/g, "").trim()); await T(); rec("checkout-" + lbl, { methods: m, hasPeriod: await page.getByTestId("service-period").count() > 0, blocked: m.length === 0 }); if (lbl === "review") await shot("checkout-review"); }
     await go("/my-reservations"); rec("my-reservations", { ok: (await T()).length > 20 }); await go("/purchases"); rec("purchases", { ok: (await T()).length > 20 });
   }
   if (who === "S" || who === "A") { await go("/manager"); const t = await T(); rec("manager-home", { entered: /관리|센터|대시보드|매출/.test(t) && !/권한이 없|매니저 권한/.test(t), text: t.slice(0, 80) }); if (who === "S") await shot("manager-home"); }

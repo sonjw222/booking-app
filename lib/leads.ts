@@ -20,7 +20,18 @@ export type Lead = {
   createdAt: string;
 };
 
-function mapRow(r: any): Lead {
+interface LeadRow {
+  id: string;
+  center_id: string;
+  name: string;
+  phone: string | null;
+  channel: string | null;
+  status: LeadStatus;
+  memo: string | null;
+  created_at: string;
+}
+
+function mapRow(r: LeadRow): Lead {
   return {
     id: r.id, centerId: r.center_id, name: r.name, phone: r.phone,
     channel: r.channel, status: r.status, memo: r.memo, createdAt: r.created_at,

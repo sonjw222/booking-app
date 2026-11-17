@@ -9,6 +9,9 @@
 import { supabase } from "./supabaseClient";
 import { isFullKrMobile } from "./krPhone";
 import { displayMemberName } from "./memberName";
+import { one, rowsOf } from "./embed";
+
+type StaffRoleEmbed = { id: string; name: string; is_owner: boolean };
 
 export type Permission = {
   key: string;
@@ -56,7 +59,7 @@ export async function fetchPermissions(): Promise<Permission[]> {
     .order("category")
     .order("sort_order");
   if (error) throw new Error("권한 목록을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((p: any) => ({
+  return (data ?? []).map((p) => ({
     key: p.key,
     category: p.category,
     parentKey: p.parent_key,
@@ -74,7 +77,7 @@ export async function fetchRoles(centerId: string): Promise<Role[]> {
     .eq("center_id", centerId)
     .order("sort_order");
   if (error) throw new Error("역할 목록을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((r: any) => ({
+  return (data ?? []).map((r) => ({
     id: r.id, name: r.name, roleKey: r.role_key,
     isSystem: r.is_system, isOwner: r.is_owner,
   }));
@@ -102,7 +105,7 @@ export async function fetchRolePermissions(roleId: string): Promise<string[]> {
     .select("permission_key")
     .eq("role_id", roleId);
   if (error) throw new Error("권한을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((r: any) => r.permission_key);
+  return (data ?? []).map((r) => r.permission_key);
 }
 
 // 역할 권한 저장 (전체 교체 방식)
@@ -125,14 +128,14 @@ export async function fetchStaff(centerId: string): Promise<Staff[]> {
     .select("id, account_id, status, accounts(name, phone), center_roles(id, name, is_owner)")
     .eq("center_id", centerId);
   if (error) throw new Error("스태프 목록을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((s: any) => ({
+  return (data ?? []).map((s) => ({
     id: s.id,
     accountId: s.account_id,
-    name: s.accounts?.name ?? "(이름 없음)",
-    phone: s.accounts?.phone ?? null,
-    roleId: s.center_roles?.id ?? null,
-    roleName: s.center_roles?.name ?? null,
-    isOwner: s.center_roles?.is_owner ?? false,
+    name: one<{ name: string }>(s.accounts)?.name ?? "(이름 없음)",
+    phone: one<{ phone: string | null }>(s.accounts)?.phone ?? null,
+    roleId: one<StaffRoleEmbed>(s.center_roles)?.id ?? null,
+    roleName: one<StaffRoleEmbed>(s.center_roles)?.name ?? null,
+    isOwner: one<StaffRoleEmbed>(s.center_roles)?.is_owner ?? false,
     status: s.status,
   }));
 }
@@ -148,7 +151,7 @@ export async function searchAccounts(centerId: string, phone: string): Promise<S
     if (error.code === "42883" || error.code === "PGRST202") throw new Error("스태프 검색 기능을 사용할 수 없어요. 앱/서버 업데이트 후 다시 시도해주세요");
     throw new Error(/권한|로그인|너무 많아요/.test(error.message ?? "") ? error.message : "계정 검색에 실패했어요: " + error.message);
   }
-  return ((data ?? []) as any[]).map((a) => ({
+  return rowsOf<{ account_id: string; name: string | null; phone: string | null; already_staff: boolean | null; staff_status: string | null }>(data).map((a) => ({
     id: a.account_id, name: displayMemberName(a.name), phone: a.phone ?? null,
     alreadyStaff: !!a.already_staff, staffStatus: a.staff_status ?? null,
   }));
@@ -250,7 +253,7 @@ export async function fetchStaffOverrides(managerCenterId: string): Promise<Reco
     .eq("manager_center_id", managerCenterId);
   if (error) throw new Error("개인 권한을 불러오지 못했어요: " + error.message);
   const map: Record<string, GrantType> = {};
-  for (const r of data ?? []) map[(r as any).permission_key] = (r as any).grant_type;
+  for (const r of data ?? []) map[r.permission_key] = r.grant_type;
   return map;
 }
 

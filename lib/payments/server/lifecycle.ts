@@ -20,7 +20,7 @@ export type RefundCtx = {
   membershipId: string; status: string; blockReason: string | null; orderId: string | null;
   provider: string | null; paymentKey: string | null; amount: number; refundPending?: boolean;
 };
-type DbResult<T = any> = { data: T | null; error: { message: string } | null };
+type DbResult<T = Record<string, unknown>> = { data: T | null; error: { message: string } | null };
 
 export type LifecycleDeps = {
   getAuthUid(token: string): Promise<string | null>;

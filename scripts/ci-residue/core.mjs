@@ -42,7 +42,6 @@ const byId = (rows) => new Map(rows.map((r) => [r.id, r]));
 export const CHILD_TABLES = ["class_allowed_products", "class_trainers", "schedule_memos"];
 export const RES_CHILD_TABLES = ["reservation_goods_usages"];
 export const WRITE_TABLES = ["classes", "reservations", ...CHILD_TABLES, ...RES_CHILD_TABLES];
-const AUDIT = [["admin_action_logs", "class_id"], ["admin_action_logs", "reservation_id"]];
 
 /** 현재 DB 상태를 계획과 같은 모양으로 읽는다(읽기 전용). 조회 실패는 예외 — 조회 실패는 삭제 근거가 아니다. */
 export async function readLive(client, classIds, planProfileIds = []) {

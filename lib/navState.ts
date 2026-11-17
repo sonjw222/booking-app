@@ -111,7 +111,7 @@ export async function fetchHasUsableMembership(): Promise<boolean> {
   const { data: profiles, error: profErr } = await supabase
     .from("profiles").select("id").eq("account_id", accountId).is("deleted_at", null);
   if (profErr) throw new Error("프로필을 확인하지 못했어요: " + profErr.message);
-  const profileIds = (profiles ?? []).map((p: any) => p.id);
+  const profileIds = (profiles ?? []).map((p) => p.id);
   if (profileIds.length === 0) return false;
 
   const today = todayKstYmd();
@@ -123,5 +123,5 @@ export async function fetchHasUsableMembership(): Promise<boolean> {
     .gte("expires_at", today);
   if (memErr) throw new Error("수강권을 확인하지 못했어요: " + memErr.message);
 
-  return (mems ?? []).some((m: any) => isUsableMembershipRow(m));
+  return (mems ?? []).some((m) => isUsableMembershipRow(m));
 }

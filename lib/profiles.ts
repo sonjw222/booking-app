@@ -40,7 +40,7 @@ export async function fetchProfiles(): Promise<ProfileRow[]> {
     .order("is_primary", { ascending: false })
     .order("created_at", { ascending: true });
   if (error) throw new Error("프로필을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((p: any) => ({
+  return (data ?? []).map((p) => ({
     id: p.id,
     name: p.name,
     nickname: p.nickname,
@@ -115,9 +115,9 @@ export async function updateProfile(profileId: string, edit: ProfileEdit): Promi
   // 성공했을 때만" 이전 파일을 지운다. 이 조회 자체가 실패해도(RLS 등) 아래에서
   // previousAvatarUrl이 null로 남아 cleanup이 조용히 건너뛰어질 뿐, 저장 자체는 막지 않는다.
   const { data: before } = await supabase.from("profiles").select("avatar_url").eq("id", profileId).maybeSingle();
-  const previousAvatarUrl = (before as any)?.avatar_url ?? null;
+  const previousAvatarUrl = before?.avatar_url ?? null;
 
-  const patch: any = {
+  const patch: Record<string, string | null> = {
     nickname: edit.nickname || null,
     label: edit.label || null,
     birth_date: edit.birthDate || null,
@@ -194,5 +194,5 @@ export async function deleteProfile(profileId: string): Promise<void> {
 
   // soft-delete가 성공한 *뒤에만* Storage object를 지운다 — best-effort(실패해도 삭제
   // 자체는 이미 끝난 상태이므로 예외를 던지지 않음, orphan 가능성만 로그로 남김).
-  await cleanupOldAvatarIfReplaced((data as any).avatar_url ?? null, null);
+  await cleanupOldAvatarIfReplaced(data.avatar_url ?? null, null);
 }

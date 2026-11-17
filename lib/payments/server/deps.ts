@@ -42,7 +42,7 @@ export function buildDeps(admin: SupabaseClient, tossSecretKey: string): Lifecyc
       if ((kind as { payment_provider?: string } | null)?.payment_provider === "nicepay") return nicepayGate(admin)(orderId);
       if (process.env.NEXT_PUBLIC_PG_CHECKOUT_ENABLED === "true") return true;
       const { data: ord } = await admin.from("orders").select("profiles(accounts(pg_checkout_override))").eq("id", orderId).maybeSingle();
-      return !!(ord as any)?.profiles?.accounts?.pg_checkout_override;
+      return !!(ord as { profiles?: { accounts?: { pg_checkout_override?: boolean | null } | null } | null } | null)?.profiles?.accounts?.pg_checkout_override;
     },
     // 시크릿이 없으면 토스를 호출하지 않고 실패로 처리한다(취소/환불 라우트는 키가 없어도 토스와 무관한 경로가 동작해야 하므로 여기서 막는다).
     tossConfirm: (p) => (tossSecretKey ? tossConfirmPayment(tossSecretKey, p) : Promise.resolve(NO_SECRET)),

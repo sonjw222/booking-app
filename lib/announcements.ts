@@ -7,6 +7,7 @@
 
 import { supabase } from "./supabaseClient";
 import { sanitizeRichText } from "./security";
+import { one } from "./embed";
 
 const KST = new Intl.DateTimeFormat("ko-KR", {
   timeZone: "Asia/Seoul", year: "2-digit", month: "2-digit", day: "2-digit",
@@ -23,7 +24,17 @@ export type Announcement = {
   createdAt: string;
 };
 
-function mapRow(r: any): Announcement {
+interface AnnouncementRow {
+  id: string;
+  center_id: string;
+  title: string;
+  body: string | null;
+  photos: string[] | null;
+  pinned: boolean | null;
+  created_at: string;
+}
+
+function mapRow(r: AnnouncementRow): Announcement {
   return {
     id: r.id,
     centerId: r.center_id,
@@ -44,7 +55,7 @@ export async function fetchMyAnnouncements(): Promise<(Announcement & { centerNa
     .order("created_at", { ascending: false })
     .limit(100);
   if (error) return [];
-  return (data ?? []).map((r: any) => ({ ...mapRow(r), centerName: r.centers?.name ?? "센터" }));
+  return (data ?? []).map((r) => ({ ...mapRow(r), centerName: one<{ name: string }>(r.centers)?.name ?? "센터" }));
 }
 
 // 특정 센터 공지 목록

@@ -121,9 +121,9 @@ export async function fetchMembershipSessionEditData(
   if (ovErr) throw new Error("회차별 금액을 불러오지 못했어요: " + ovErr.message);
 
   const totalCount = mem.total_count ?? 0;
-  const paidTotal = (payRows ?? []).reduce((sum, p: any) => sum + (p.total_amount ?? 0), 0);
+  const paidTotal = (payRows ?? []).reduce((sum, p) => sum + (p.total_amount ?? 0), 0);
   const overrideMap = new Map<number, number>();
-  for (const o of overrides ?? []) overrideMap.set((o as any).session_index, (o as any).amount);
+  for (const o of overrides ?? []) overrideMap.set(o.session_index, o.amount);
 
   const base = totalCount > 0 ? Math.floor(paidTotal / totalCount) : 0;
   const remainder = totalCount > 0 ? paidTotal % totalCount : 0;

@@ -64,8 +64,9 @@ export async function sha256Hex(input: string): Promise<string> {
     .join("");
 }
 
-function isCancelledError(e: any): boolean {
-  return e?.code === "canceled" || e?.message === "canceled";
+function isCancelledError(e: unknown): boolean {
+  const err = e as { code?: unknown; message?: unknown } | null | undefined;
+  return err?.code === "canceled" || err?.message === "canceled";
 }
 
 // Capacitor의 registerPlugin() 프록시는 네이티브 쪽에 해당 플러그인이 실제로 등록돼
@@ -75,9 +76,10 @@ function isCancelledError(e: any): boolean {
 //구분해서, 정책대로 signInWithOAuth 등 어떤 웹 폴백도 시도하지 않고 여기서 바로
 // 끝낸다(실기기 QA 2026-09-14: 정책 — "네이티브 플러그인을 못 찾았다고 OAuth로
 // 폴백하지 말 것, 앱 내부 오류로 끝낼 것").
-export function isPluginUnavailableError(e: any): boolean {
-  const msg = String(e?.message ?? "");
-  return e?.code === "UNIMPLEMENTED" || /not implemented/i.test(msg);
+export function isPluginUnavailableError(e: unknown): boolean {
+  const err = e as { code?: unknown; message?: unknown } | null | undefined;
+  const msg = String(err?.message ?? "");
+  return err?.code === "UNIMPLEMENTED" || /not implemented/i.test(msg);
 }
 
 // 성공하면 세션이 생긴다(SessionWatcher의 onAuthStateChange가 계정 부트스트랩을 이어서
@@ -114,7 +116,7 @@ export async function signInWithAppleNative(): Promise<{ fullName?: string }> {
       hasIdentityToken: !!native?.identityToken,
       hasFullName: !!native?.fullName,
     });
-  } catch (e: any) {
+  } catch (e) {
     if (isCancelledError(e)) {
       console.log("[appleAuth] 사용자가 Apple 인증 시트에서 취소함");
       throw new AppleSignInCancelledError("사용자가 취소했어요");
@@ -124,7 +126,7 @@ export async function signInWithAppleNative(): Promise<{ fullName?: string }> {
       throw new Error("Apple 로그인을 초기화할 수 없어요. 앱을 최신 버전으로 업데이트해주세요.");
     }
     console.error("[appleAuth] 네이티브 플러그인 호출 실패", e);
-    throw new Error(e?.message || "Apple 로그인에 실패했어요");
+    throw new Error((e as { message?: string } | null | undefined)?.message || "Apple 로그인에 실패했어요");
   }
   if (!native?.identityToken) {
     console.error("[appleAuth] identityToken 누락된 응답", native);

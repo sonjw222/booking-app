@@ -12,6 +12,33 @@ import { getMyAccountId } from "./authAccount";
 import { disableNativePush } from "./nativePush";
 
 import { todayKstYmd } from "./membershipExpiry";
+import { one, rowsOf } from "./embed";
+
+// fetchMyPage 수강권 조회 행(임베드는 런타임상 객체/null — lib/embed.ts 참고).
+interface MyMembershipRow {
+  id: string;
+  profile_id: string;
+  bound_profile_id: string | null;
+  center_id: string;
+  product_id: string | null;
+  product_name: string;
+  total_count: number;
+  remaining_count: number;
+  expires_at: string | null;
+  starts_at: string | null;
+  created_at: string;
+  status: string;
+  centers: { name: string } | null;
+  products: { product_kind?: string | null; unlimited?: boolean | null; unlimited_pass?: boolean | null } | null;
+}
+
+// 예약내역/캘린더 조회 행의 classes 임베드.
+interface ReservationClassEmbed {
+  title: string;
+  start_time: string;
+  end_time?: string | null;
+  centers?: { name: string } | null;
+}
 export type Profile = { name: string; phone: string | null; isMember: boolean; isManager: boolean; isPlatformAdmin: boolean };
 
 export type Membership = {
@@ -161,7 +188,7 @@ export async function fetchMyAccountInfo(): Promise<{ name: string; phone: strin
     .from("accounts").select("name, phone, marketing_consent")
     .eq("id", accountId).single();
   if (error || !acc) throw new Error("계정 정보를 찾을 수 없어요");
-  return { name: acc.name, phone: acc.phone, marketingConsent: !!(acc as any).marketing_consent };
+  return { name: acc.name, phone: acc.phone, marketingConsent: !!acc.marketing_consent };
 }
 
 // 마케팅 정보 수신 동의를 나중에 켜거나 끈다(철회 포함) — marketing_consent_at은
@@ -195,16 +222,16 @@ export async function fetchMyPage() {
       .order("is_primary", { ascending: false }),
   ]);
   const profiles = profRows ?? [];
-  const profileIds = profiles.map((p: any) => p.id);
+  const profileIds = profiles.map((p) => p.id);
   const hasMultiple = profiles.length > 1;
   // 프로필 id → 표시 이름. 프로필이 여러 개면 대표도 이름 표시(어느 프로필인지 구분 필요)
   const profileLabel: Record<string, string> = {};
   for (const p of profiles) {
-    const nm = (p as any).nickname || (p as any).name;
+    const nm = p.nickname || p.name;
     if (!hasMultiple) {
-      profileLabel[(p as any).id] = "";   // 프로필 하나면 태그 불필요
+      profileLabel[p.id] = "";   // 프로필 하나면 태그 불필요
     } else {
-      profileLabel[(p as any).id] = (p as any).label ? `${nm} · ${(p as any).label}` : nm;
+      profileLabel[p.id] = p.label ? `${nm} · ${p.label}` : nm;
     }
   }
 
@@ -219,7 +246,7 @@ export async function fetchMyPage() {
 
   // 다 쓴 수강권은 "마지막 예약 수업이 끝난 뒤"에 숨김
   //   → 0회여도 앞으로 들을 수업이 남아 있으면 계속 보여야 함
-  const memIds = (memRows ?? []).map((m: any) => m.id);
+  const memIds = (memRows ?? []).map((m) => m.id);
   const lastClassEnd: Record<string, string> = {};
   if (memIds.length > 0) {
     const { data: resvForMem } = await supabase
@@ -228,8 +255,8 @@ export async function fetchMyPage() {
       .in("membership_id", memIds)
       .in("status", ["confirmed", "waitlisted", "attended"]);
     for (const r of resvForMem ?? []) {
-      const mid = (r as any).membership_id;
-      const end = (r as any).classes?.end_time;
+      const mid = r.membership_id;
+      const end = one<{ end_time: string | null }>(r.classes)?.end_time;
       if (!mid || !end) continue;
       if (!lastClassEnd[mid] || end > lastClassEnd[mid]) lastClassEnd[mid] = end;
     }
@@ -239,8 +266,8 @@ export async function fetchMyPage() {
 
   // F17: 수강권은 unlimited_pass, 대여 상품은 unlimited 로 무제한을 판정한다(lib/membershipStatus).
   const kindOf = (m: { products?: { product_kind?: string | null; unlimited?: boolean | null; unlimited_pass?: boolean | null } | null; total_count: number | null; remaining_count: number | null }): CountKind => countKind({ productKind: m.products?.product_kind, unlimitedPass: m.products?.unlimited_pass, unlimitedGoods: m.products?.unlimited, totalCount: m.total_count, remainingCount: m.remaining_count });
-  const memberships: Membership[] = (memRows ?? [])
-    .filter((m: any) => {
+  const memberships: Membership[] = rowsOf<MyMembershipRow>(memRows)
+    .filter((m) => {
       if (kindOf(m) === "unlimited") return true;
       const remain = m.remaining_count;
       if (remain == null || remain > 0) return true;   // 아직 횟수 남음 → 표시
@@ -249,7 +276,7 @@ export async function fetchMyPage() {
       if (last && last > nowIso) return true;
       return false;                                     // 다 쓰고 수업도 끝남 → 숨김
     })
-    .map((m: any) => ({
+    .map((m) => ({
       id: m.id,
       centerId: m.center_id,
       productId: m.product_id ?? null,
@@ -300,16 +327,16 @@ export async function fetchRepurchaseAvailability(
     supabase.from("centers").select("id, status").in("id", centerIds),
     productIds.length > 0
       ? supabase.from("products").select("id, is_active, is_on_sale").in("id", productIds)
-      : Promise.resolve({ data: [] as any[], error: null }),
+      : Promise.resolve({ data: [], error: null }),
   ]);
   if (centerErr) throw new Error("센터 상태를 확인하지 못했어요: " + centerErr.message);
   if (productErr) throw new Error("상품 상태를 확인하지 못했어요: " + productErr.message);
 
   const centerActiveMap: Record<string, boolean> = {};
-  for (const c of centers ?? []) centerActiveMap[(c as any).id] = (c as any).status === "approved";
+  for (const c of centers ?? []) centerActiveMap[c.id] = c.status === "approved";
 
   const productPurchasableMap: Record<string, boolean> = {};
-  for (const p of products ?? []) productPurchasableMap[(p as any).id] = !!(p as any).is_active && !!(p as any).is_on_sale;
+  for (const p of products ?? []) productPurchasableMap[p.id] = !!p.is_active && !!p.is_on_sale;
 
   for (const m of memberships) {
     result[m.id] = {
@@ -335,13 +362,13 @@ export async function fetchMyReservationHistory(): Promise<HistoryItem[]> {
     .order("is_primary", { ascending: false });
   if (profErr) throw new Error("프로필을 불러오지 못했어요: " + profErr.message);
   const profiles = profRows ?? [];
-  const profileIds = profiles.map((p: any) => p.id);
+  const profileIds = profiles.map((p) => p.id);
   if (profileIds.length === 0) return [];
   const hasMultiple = profiles.length > 1;
   const profileLabel: Record<string, string> = {};
   for (const p of profiles) {
-    const nm = (p as any).nickname || (p as any).name;
-    profileLabel[(p as any).id] = !hasMultiple ? "" : ((p as any).label ? `${nm} · ${(p as any).label}` : nm);
+    const nm = p.nickname || p.name;
+    profileLabel[p.id] = !hasMultiple ? "" : (p.label ? `${nm} · ${p.label}` : nm);
   }
 
   const { data: resRows, error: resErr } = await supabase
@@ -352,17 +379,20 @@ export async function fetchMyReservationHistory(): Promise<HistoryItem[]> {
     .limit(50);
   if (resErr) throw new Error("예약내역을 불러오지 못했어요: " + resErr.message);
 
-  return (resRows ?? []).map((r: any) => ({
+  return (resRows ?? []).map((r) => {
+    const cls = one<ReservationClassEmbed>(r.classes);
+    return {
     id: r.id,
-    title: r.classes?.title ?? "",
-    centerName: r.classes?.centers?.name ?? "",
-    when: r.classes?.start_time ? fmtDateTime(r.classes.start_time) : "",
-    startAt: r.classes?.start_time ?? null,
+    title: cls?.title ?? "",
+    centerName: cls?.centers?.name ?? "",
+    when: cls?.start_time ? fmtDateTime(cls.start_time) : "",
+    startAt: cls?.start_time ?? null,
     status: r.status,
     profileName: profileLabel[r.profile_id] ?? "",
     reservationType: r.reservation_type ?? "MEMBER",
     cancelSource: r.cancel_source ?? null,
-  }));
+  };
+  });
 }
 
 export async function logout() {
@@ -408,12 +438,12 @@ export async function fetchMyPointHistory(): Promise<PointHistoryItem[]> {
   const { data: profRows } = await supabase
     .from("profiles").select("id, name, label, is_primary").eq("account_id", accountId);
   const profiles = profRows ?? [];
-  const profileIds = profiles.map((p: any) => p.id);
+  const profileIds = profiles.map((p) => p.id);
   const profileLabel: Record<string, string> = {};
   for (const p of profiles) {
-    profileLabel[(p as any).id] = (p as any).is_primary
+    profileLabel[p.id] = p.is_primary
       ? ""
-      : ((p as any).label ? `${(p as any).name} · ${(p as any).label}` : (p as any).name);
+      : (p.label ? `${p.name} · ${p.label}` : p.name);
   }
   if (profileIds.length === 0) return [];
 
@@ -428,7 +458,7 @@ export async function fetchMyPointHistory(): Promise<PointHistoryItem[]> {
 
   // 운영설정 "회원앱 포인트 내역 조회" — 센터마다 다를 수 있어 등장한 센터들만 조회하고,
   // false인 센터의 내역은 화면에서 제외한다(값이 없으면 기본 true와 동일하게 표시).
-  const centerIds = Array.from(new Set(rows.map((r: any) => r.center_id)));
+  const centerIds = Array.from(new Set(rows.map((r) => r.center_id)));
   const showHistoryByCenter: Record<string, boolean> = {};
   if (centerIds.length > 0) {
     const { data: settingsRows } = await supabase
@@ -436,17 +466,17 @@ export async function fetchMyPointHistory(): Promise<PointHistoryItem[]> {
       .select("center_id, show_point_history")
       .in("center_id", centerIds);
     for (const s of settingsRows ?? []) {
-      showHistoryByCenter[(s as any).center_id] = (s as any).show_point_history ?? true;
+      showHistoryByCenter[s.center_id] = s.show_point_history ?? true;
     }
   }
 
   return rows
-    .filter((r: any) => showHistoryByCenter[r.center_id] ?? true)
-    .map((r: any) => {
+    .filter((r) => showHistoryByCenter[r.center_id] ?? true)
+    .map((r) => {
       const dt = new Date(r.created_at);
       return {
         id: r.id,
-        centerName: r.centers?.name ?? "",
+        centerName: one<{ name: string }>(r.centers)?.name ?? "",
         amount: r.amount,
         reason: r.reason,
         date: KST_DATE_ONLY.format(dt),
@@ -483,12 +513,12 @@ export async function fetchMyReservationsForCalendar(): Promise<CalReservation[]
   const { data: profiles } = await supabase
     .from("profiles").select("id, name, nickname, label, is_primary").eq("account_id", accountId);
   const profs = profiles ?? [];
-  const ids = profs.map((p: any) => p.id);
+  const ids = profs.map((p) => p.id);
   const hasMultiple = profs.length > 1;
   const label: Record<string, string> = {};
   for (const p of profs) {
-    const nm = (p as any).nickname || (p as any).name;
-    label[(p as any).id] = hasMultiple ? ((p as any).label ? `${nm} · ${(p as any).label}` : nm) : "";
+    const nm = p.nickname || p.name;
+    label[p.id] = hasMultiple ? (p.label ? `${nm} · ${p.label}` : nm) : "";
   }
 
   const { data, error } = await supabase
@@ -499,18 +529,21 @@ export async function fetchMyReservationsForCalendar(): Promise<CalReservation[]
     .order("created_at", { ascending: false });
   if (error) throw new Error("예약을 불러오지 못했어요: " + error.message);
 
-  return (data ?? []).filter((r: any) => r.classes).map((r: any) => ({
+  return (data ?? []).filter((r) => r.classes).map((r) => {
+    const cls = one<ReservationClassEmbed>(r.classes)!;
+    return {
     id: r.id,
-    date: KST_DATE_C.format(new Date(r.classes.start_time)),
-    time: KST_TIME_C.format(new Date(r.classes.start_time)),
-    startIso: r.classes.start_time,
-    endIso: r.classes.end_time ?? r.classes.start_time,
-    title: r.classes.title,
-    centerName: r.classes.centers?.name ?? "",
+    date: KST_DATE_C.format(new Date(cls.start_time)),
+    time: KST_TIME_C.format(new Date(cls.start_time)),
+    startIso: cls.start_time,
+    endIso: cls.end_time ?? cls.start_time,
+    title: cls.title,
+    centerName: cls.centers?.name ?? "",
     status: r.status,
     profileName: label[r.profile_id] ?? "",
     memo: r.member_memo ?? null,
-  }));
+  };
+  });
 }
 
 export async function updateReservationMemo(reservationId: string, memo: string): Promise<void> {

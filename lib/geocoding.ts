@@ -19,7 +19,14 @@ export type GeocodeResult = {
 
 const NOMINATIM_BASE = "https://nominatim.openstreetmap.org";
 
-function buildDisplayParts(d: any): { road: string | null; jibun: string | null } {
+interface NominatimItem {
+  lat: string;
+  lon: string;
+  display_name: string;
+  address?: { road?: string; house_number?: string; city_district?: string; borough?: string; suburb?: string; city?: string; town?: string; village?: string };
+}
+
+function buildDisplayParts(d: NominatimItem): { road: string | null; jibun: string | null } {
   const a = d.address ?? {};
   const road = [a.road, a.house_number].filter(Boolean).join(" ") || null;
   const jibun = a.city_district || a.borough || a.suburb || a.city || a.town || a.village || null;
@@ -41,7 +48,7 @@ export async function searchAddress(query: string, limit = 5): Promise<GeocodeRe
     throw new Error("주소를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
   }
   if (!res.ok) throw new Error("주소를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
-  let data: any[];
+  let data: NominatimItem[];
   try {
     data = await res.json();
   } catch {

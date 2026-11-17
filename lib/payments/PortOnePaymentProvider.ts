@@ -16,26 +16,25 @@
 import type {
   CancelPaymentResult,
   ConfirmPaymentResult,
-  CreatePaymentInput,
   CreatePaymentResult,
   PaymentProvider,
   PaymentStatusResult,
 } from "./types";
 
 export class PortOnePaymentProvider implements PaymentProvider {
-  async createPayment(_input: CreatePaymentInput): Promise<CreatePaymentResult> {
+  async createPayment(): Promise<CreatePaymentResult> {
     throw new Error("PortOnePaymentProvider는 아직 구현되지 않았어요 (P0-1 범위 밖)");
   }
 
-  async confirmPayment(_paymentKey: string, _orderId: string): Promise<ConfirmPaymentResult> {
+  async confirmPayment(): Promise<ConfirmPaymentResult> {
     throw new Error("PortOnePaymentProvider는 아직 구현되지 않았어요 (P0-1 범위 밖)");
   }
 
-  async cancelPayment(_orderId: string): Promise<CancelPaymentResult> {
+  async cancelPayment(): Promise<CancelPaymentResult> {
     throw new Error("PortOnePaymentProvider는 아직 구현되지 않았어요 (P0-1 범위 밖)");
   }
 
-  async getPaymentStatus(_orderId: string): Promise<PaymentStatusResult> {
+  async getPaymentStatus(): Promise<PaymentStatusResult> {
     throw new Error("PortOnePaymentProvider는 아직 구현되지 않았어요 (P0-1 범위 밖)");
   }
 }

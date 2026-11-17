@@ -56,17 +56,19 @@ export class GoogleSignInCancelledError extends Error {}
 
 export class GoogleSignInNotConfiguredError extends Error {}
 
-function isCancelledError(e: any): boolean {
-  return e?.code === "canceled" || e?.message === "canceled";
+function isCancelledError(e: unknown): boolean {
+  const err = e as { code?: unknown; message?: unknown } | null | undefined;
+  return err?.code === "canceled" || err?.message === "canceled";
 }
 
 // registerPlugin() 프록시는 네이티브 쪽에 해당 플러그인이 실제로 등록돼 있지 않으면
 // (빌드에 네이티브 파일이 안 실렸거나 등록 누락 등) 메서드 호출 시
 // CapacitorException(ExceptionCode.Unimplemented)을 던진다 — appleAuth.ts와 동일한
 // 판별 로직. export해서 단위 테스트로 고정한다(appleAuth.isPluginUnavailableError와 동일 관례).
-export function isPluginUnavailableError(e: any): boolean {
-  const msg = String(e?.message ?? "");
-  return e?.code === "UNIMPLEMENTED" || /not implemented/i.test(msg);
+export function isPluginUnavailableError(e: unknown): boolean {
+  const err = e as { code?: unknown; message?: unknown } | null | undefined;
+  const msg = String(err?.message ?? "");
+  return err?.code === "UNIMPLEMENTED" || /not implemented/i.test(msg);
 }
 
 function getClientId(): string {
@@ -107,7 +109,7 @@ export async function signInWithGoogleNative(): Promise<{ fullName?: string }> {
       hasIdToken: !!native?.idToken,
       hasFullName: !!native?.fullName,
     });
-  } catch (e: any) {
+  } catch (e) {
     if (isCancelledError(e)) {
       console.log("[googleAuth] 사용자가 Google 인증 화면에서 취소함");
       throw new GoogleSignInCancelledError("사용자가 취소했어요");
@@ -117,7 +119,7 @@ export async function signInWithGoogleNative(): Promise<{ fullName?: string }> {
       throw new Error("Google 로그인을 초기화할 수 없어요. 앱을 최신 버전으로 업데이트해주세요.");
     }
     console.error("[googleAuth] 네이티브 플러그인 호출 실패", e);
-    throw new Error(e?.message || "Google 로그인에 실패했어요");
+    throw new Error((e as { message?: string } | null | undefined)?.message || "Google 로그인에 실패했어요");
   }
   if (!native?.idToken) {
     console.error("[googleAuth] idToken 누락된 응답", native);

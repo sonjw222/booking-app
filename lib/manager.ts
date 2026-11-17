@@ -6,6 +6,16 @@
 
 import { supabase } from "./supabaseClient";
 import { getMyAccountId as getMyAccountIdBase } from "./authAccount";
+import { rowsOf } from "./embed";
+
+// fetchMyCenters select 결과 행(임베드는 런타임상 객체/null).
+interface MyCenterRow {
+  id: string;
+  role_id: string | null;
+  status: string;
+  centers: { id: string; name: string; status: string | null } | null;
+  center_roles: { name: string; is_owner: boolean } | null;
+}
 
 export type ManagedCenter = {
   id: string;
@@ -73,15 +83,15 @@ export async function fetchMyCenters(): Promise<ManagedCenter[]> {
       .eq("account_id", accountId)
       .eq("status", "active"); // 소속 자체는 활성인 것만 (센터 승인 여부와는 별개)
     if (error) throw new Error("센터 목록을 불러오지 못했어요: " + error.message);
-    return (data ?? [])
-      .filter((r: any) => r.centers)
-      .map((r: any) => ({
-        id: r.centers.id,
-        name: r.centers.name,
+    return rowsOf<MyCenterRow>(data)
+      .filter((r) => r.centers)
+      .map((r) => ({
+        id: r.centers!.id,
+        name: r.centers!.name,
         roleName: r.center_roles?.name ?? "매니저",
         isOwner: r.center_roles?.is_owner ?? false,
         status: r.status,
-        approvalStatus: r.centers.status ?? "approved",
+        approvalStatus: r.centers!.status ?? "approved",
         managerCenterId: r.id,
         roleId: r.role_id ?? null,
       }));

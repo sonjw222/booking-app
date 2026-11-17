@@ -6,6 +6,7 @@
   - center_id 필터를 유지해 다른 센터 회원은 라벨에 섞이지 않는다.
 */
 import { displayMemberName } from "./memberName";
+import { rowsOf } from "./embed";
 import { supabase } from "./supabaseClient";
 
 export async function fetchVisibilityMemberLabels(centerId: string, centerMemberIds: string[]): Promise<Record<string, string>> {
@@ -16,14 +17,14 @@ export async function fetchVisibilityMemberLabels(centerId: string, centerMember
     .eq("center_id", centerId)
     .in("id", centerMemberIds);
   if (error) throw new Error("회원 정보를 불러오지 못했어요: " + error.message);
-  const rows = (data ?? []) as any[];
+  const rows = rowsOf<{ id: string; profile_id: string; profiles: { name: string | null } | null }>(data);
   const profileIds = rows.map((r) => r.profile_id);
   const phoneByProfile: Record<string, string | null> = {};
   if (profileIds.length > 0) {
     const { data: phones } = await supabase.rpc("fetch_member_phones_safe", {
       p_profile_ids: profileIds, p_center_id: centerId,
     });
-    for (const row of (phones ?? []) as any[]) phoneByProfile[row.profile_id] = row.account_phone ?? null;
+    for (const row of rowsOf<{ profile_id: string; account_phone: string | null }>(phones)) phoneByProfile[row.profile_id] = row.account_phone ?? null;
   }
   const labels: Record<string, string> = {};
   for (const r of rows) {

@@ -1,6 +1,6 @@
 // 결함 재현/회귀: 직접 REST 로 상품 id 와 센터 id 를 어긋나게 넣은 주문·장바구니·구매신청·수강권을 시도한다. 로컬 일회용 스택 전용(ISO_ENV_FILE). 분리 SQL 적용 후에는 모두 DENY 여야 한다.
 // 결함 재현: 직접 REST(PostgREST)로 orders/cart_items/purchase_requests/memberships/reservations 를 상품 id 와 센터 id 를 어긋나게 넣는다.
-import { createRequire } from "node:module"; import fs from "node:fs";
+import { createRequire } from "node:module";
 const require = createRequire(process.cwd() + "/package.json"); const { createClient } = require("@supabase/supabase-js");
 import { loadIsolatedEnv } from "./assertIsolated.mjs";
 const env = loadIsolatedEnv(process.env.ISO_ENV_FILE);   // 어떤 요청보다 먼저 일회용 로컬 스택 확인
