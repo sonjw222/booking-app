@@ -1,5 +1,7 @@
 # TODO
 
+- **P1(병합 후 정리)**: main 동기화(2026-11-17) 후 남은 WIP — Draft PR #254(14커밋)·#260(20커밋)·#263(2커밋)은 운영 미반영. 각각 main 기준으로 rebase/재검토 필요. 열린 Issue: #262·#261·#255·#248·#238·#221·#18. Codex 로컬 브랜치 `feat/nicepay-subscription-production-review-20261116` 는 이제 main 에 포함(push 불필요).
+- **P2**: 병합 후 `graphify update .` 로 그래프 갱신 여부 결정(구조 변경 큼). 주문 사이즈 서버 검증 SQL(제안) 적용 여부 결정.
 - **P1(실기기)**: 수강권 안내창 — 새 iOS 빌드(네이티브 `setVerticalBounceEnabled` 포함)로 흰 레터박스 재발 여부·드래그 부드러움·플릭 닫기 확인. 재발 시 `localStorage.mwhabit_sheet_debug="1"` 후 `window.__sheetDragLog` 수집(Safari 웹 인스펙터). 같은 문제가 다른 바텀시트에도 있으면 `contentDrag` opt-in.
 - **P2(실기기)**: 수강권 안내창 — iOS WKWebView 에서 본문 드래그 닫기·흰 빈 영역(바운스) 차단·왼쪽 가장자리 스와이프 무시를 실기기로 확인(웹 코드 변경만이라 TestFlight 재빌드 불필요). 다른 바텀시트에도 같은 처리가 필요하면 `contentDrag`(+`data-edge-swipe-block`)를 해당 시트에 opt-in.
 - **P2**: 고정 `href` ‹ 링크(`<Link className="side" href=…>` 58곳: /mypage·/admin·/manager 등 root 로 가는 링크)는 뒤로가기가 아니라 push 라 entry 가 하나 더 생긴다 — 목적지가 root 라 왕복 루프는 없으나, 공통 처리(이전 경로와 같으면 router.back)로 정리 검토. 실기기: NICEPAY 결제창 위에서 `history.go(-n)` 복귀(entry 수·bfcache) 확인.

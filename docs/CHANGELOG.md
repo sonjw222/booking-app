@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-11-17 — Production ↔ main 동기화 (`integration/production-main-sync-20261117`)
+- main(368aa3e1)에 운영 소스(Vercel `dpl_6EEzhpHRoHBqj8Qm9ftHgzqkXRUo`, 통합 `1ace864b`)를 병합: NICEPAY 심사 경로(#259/#264/#265)·구독 심사(33bc408c)·iOS Build 12 네이티브·UX 통합·수강권 안내창 개선. 이 문서 이전의 "운영 미반영" 표기 항목들은 이 병합 시점에 운영 반영 상태다. 앱 코드 신규 변경 없음(문서만). 상세: `docs/PRODUCTION_MAIN_SYNC_20261117.md`.
+
 ## 2026-11-16 — 수강권 안내창 드래그 부드러움·간헐적 흰 레터박스 (`fix/product-sheet-ios-bounce-smooth-20261116`, 기준 `4093ee62`, 운영 미반영)
 - 웹: 드래그 이벤트를 window 에서 수신(요소 소실·touchend 누락 시에도 종료)+복구 장치(touchcancel/blur/pagehide/정지 타임아웃/새 터치), 아래 플릭 닫기(≥0.5px/ms), 레이아웃 읽기 제거·transform 기반·본문 overflow 잠금·감속 곡선, snap-back 중 재드래그, 키보드 때만 visualViewport 보정, 진단 로그(옵션).
 - 네이티브(iOS): 기존 NavigationPolicy 플러그인에 `setVerticalBounceEnabled` — 시트가 열린 동안만 WebView 세로 바운스 off, 닫힘/로드/백그라운드에서 복원(앱 전역 bounces=true 유지). **새 iOS 빌드 필요**(1.0.3 (12) 이상). SQL·결제 변경 없음. 상세·한계: `docs/qa/sheet-bounce-20261116/ANALYSIS.md`.
