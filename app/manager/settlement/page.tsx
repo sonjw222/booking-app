@@ -204,7 +204,7 @@ export default function ManagerSettlementPage() {
                     <button className="ghost-btn" disabled>계좌 등록</button>
                     <div className="set-soon-note">
                       정산 자동화 연동 준비 중이에요 — 계약이 확정되면 이 화면에서
-                      등록할 수 있어요. 그때까지는 위 "정산 계좌(수동 정산용)"으로
+                      등록할 수 있어요. 그때까지는 위 &quot;정산 계좌(수동 정산용)&quot;으로
                       운영해주세요.
                     </div>
                   </>

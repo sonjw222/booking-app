@@ -355,7 +355,7 @@ export default function AlimtalkTemplatesPage() {
             )}
             {isApprovedDetail && (
               <div className="perm-guide" style={{ margin: "0 0 8px" }}>
-                카카오 승인이 끝난 문구는 그대로 유지돼요. 내용을 바꾸려면 "새 템플릿으로 복제"를 눌러 새로 만들고 다시 승인을 신청해주세요.
+                카카오 승인이 끝난 문구는 그대로 유지돼요. 내용을 바꾸려면 &quot;새 템플릿으로 복제&quot;를 눌러 새로 만들고 다시 승인을 신청해주세요.
               </div>
             )}
             {isLocked && !isApprovedDetail && (

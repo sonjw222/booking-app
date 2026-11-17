@@ -710,7 +710,7 @@ function MembersContent() {
         </div>
       </div>
       <div className="perm-guide" style={{ margin: "0 16px 4px", fontSize: 11.5 }}>
-        수강권을 구매한 사람만 회원으로 표시돼요. 횟수 소진·기간 만료는 '만료', 휴면 처리 시 기간권 시간이 정지돼요.
+        수강권을 구매한 사람만 회원으로 표시돼요. 횟수 소진·기간 만료는 &apos;만료&apos;, 휴면 처리 시 기간권 시간이 정지돼요.
       </div>
 
       <div className="mem-toolbar">
@@ -1371,7 +1371,7 @@ function MembersContent() {
 
             {Number(grantPrice) === 0 && (
               <div className="perm-guide" style={{ margin: "0 0 10px" }}>
-                무상 지급은 매출 0원으로 기록돼요. 결제 내역에 "서비스"로 구분되어 남아요.
+                무상 지급은 매출 0원으로 기록돼요. 결제 내역에 &quot;서비스&quot;로 구분되어 남아요.
               </div>
             )}
 

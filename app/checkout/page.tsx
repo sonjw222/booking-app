@@ -11,6 +11,7 @@ import BackButton from "../components/BackButton";
 import { checkoutSearchWithSelection, orderOptionIssue } from "../../lib/orderOptions";
 import ServicePeriodNotice from "../components/ServicePeriodNotice";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { fetchCenterDetail, fetchCenterProductsForPurchase, fetchPurchaseScheduleOptions, type CenterProduct } from "../../lib/center";
 import { purchaseScheduleState } from "../../lib/purchaseSchedule";
@@ -19,7 +20,7 @@ import { cancelMyPendingOrderQuietly, createOrder } from "../../lib/orders";
 import { requestReturnToken } from "../../lib/payments/tossPaymentApi";
 import { clearPendingPgOrder, readPendingPgOrder, savePendingPgOrder } from "../../lib/payments/returnApi";
 import { fetchProfiles, type ProfileRow } from "../../lib/profiles";
-import { fetchMyPoints, usePoints as spendPoints } from "../../lib/reviews";
+import { fetchMyPoints, usePoints } from "../../lib/reviews";
 import Loading from "../components/Loading";
 import { reservationReturnUrl } from "../../lib/reservationNav";
 import { getPaymentService, resolveProviderName, isOnlinePgCheckoutAvailable, PG_CHECKOUT_ENABLED, type PaymentScenario } from "../../lib/payments";
@@ -358,7 +359,7 @@ function CheckoutContent() {
           // 로직도 이 주문을 건드리지 않아야 함 — 매니저 수동 발급 전용 경로).
         });
         directOrderIdForCleanup = directOrderId;
-        if (pointToUse > 0) await spendPoints(centerId, pointToUse, directOrderId);
+        if (pointToUse > 0) await usePoints(centerId, pointToUse, directOrderId);
         directOrderIdForCleanup = null;
         setPendingManualPayment(true);
         setDone(true);
@@ -407,7 +408,7 @@ function CheckoutContent() {
       pgOrderIdForCleanup = orderId;
       // [SEC-118] 주문을 먼저 만들고 그 id로 포인트를 사용한다 — 서버가 나중에 확정 시점에
       // "이 주문번호로 실제 차감된 point_transactions 행이 있는지"로 points_used를 검증한다.
-      if (pointToUse > 0) await spendPoints(centerId, pointToUse, orderId);
+      if (pointToUse > 0) await usePoints(centerId, pointToUse, orderId);
 
       const paymentService = getPaymentService(mockScenarioOverride);
 
@@ -561,7 +562,7 @@ function CheckoutContent() {
           description="링크가 만료됐거나 상품이 삭제됐을 수 있어요."
           action={<>
             <a className="primary-btn" href="/cart">장바구니로 가기</a>
-            <a className="ghost-btn" style={{ marginTop: 8 }} href="/">홈으로</a>
+            <Link className="ghost-btn" style={{ marginTop: 8 }} href="/">홈으로</Link>
           </>}
         />
       </div>

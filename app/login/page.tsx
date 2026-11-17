@@ -11,6 +11,7 @@
   - 소셜 로그인: 카카오 / 네이버 / 애플
 */
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase, REMEMBER_ME_KEY } from "../../lib/supabaseClient";
 import AppButton from "../components/AppButton";
@@ -468,7 +469,7 @@ export default function LoginPage() {
   return (
     <div className="app-shell auth-page-v2">
       <div className="auth-scene">
-        <a className="auth-home-link" href="/">모하빗</a>
+        <Link className="auth-home-link" href="/">모하빗</Link>
         <div className="auth-scene-copy">
           <span>MOVE · BOOK · ENJOY</span>
           <h1>오늘의 움직임을<br />가볍게 시작하세요.</h1>

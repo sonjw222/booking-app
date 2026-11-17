@@ -1783,7 +1783,7 @@ export default function ClassManagePage() {
                   if (filtered.length === 0) {
                     return (
                       <div className="daylist-empty" style={{ padding: "8px 0" }}>
-                        <span style={{ fontSize: 12 }}>"{passSearch}"와 일치하는 수강권이 없어요</span>
+                        <span style={{ fontSize: 12 }}>&quot;{passSearch}&quot;와 일치하는 수강권이 없어요</span>
                       </div>
                     );
                   }
@@ -1869,7 +1869,7 @@ export default function ClassManagePage() {
                   if (filtered.length === 0) {
                     return (
                       <div className="daylist-empty" style={{ padding: "8px 0" }}>
-                        <span style={{ fontSize: 12 }}>"{trainerSearch}"와 일치하는 스태프가 없어요</span>
+                        <span style={{ fontSize: 12 }}>&quot;{trainerSearch}&quot;와 일치하는 스태프가 없어요</span>
                       </div>
                     );
                   }
@@ -2125,7 +2125,7 @@ export default function ClassManagePage() {
             <div className="perm-guide" style={{ margin: "0 0 12px" }}>
               요일반 수강권을 샀지만 정원이 차거나 수업이 없어서
               예약이 다 잡히지 못한 회원이에요. 수강권 만료일 이후의 수업은 횟수가 남아 있어도 자동으로 예약하지 않아요.<br />
-              <b>정원을 늘리거나 수업을 추가한 뒤</b> "다시 배치"를 누르면 자동으로 넣어드려요.
+              <b>정원을 늘리거나 수업을 추가한 뒤</b> &quot;다시 배치&quot;를 누르면 자동으로 넣어드려요.
               보강 예약으로 직접 넣어도 돼요. (먼저 구매한 순서)
             </div>
 

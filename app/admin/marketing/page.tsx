@@ -95,7 +95,7 @@ export default function MarketingPage() {
       <div className="perm-guide" style={{ margin: "8px 20px" }}>
         센터별 공지사항과 달리, 여기서 보내면 한 번에 발송돼요. 광고성 정보라서 마케팅 정보
         수신에 동의한 회원에게만 나가요(동의하지 않았거나 동의를 철회한 회원, 탈퇴한 계정은
-        제외돼요). 회원이 "혜택·이벤트 알림"을 꺼두면 팝업은 안 뜨지만 알림함에는 그대로 남아요.
+        제외돼요). 회원이 &quot;혜택·이벤트 알림&quot;을 꺼두면 팝업은 안 뜨지만 알림함에는 그대로 남아요.
       </div>
 
       {composing ? (

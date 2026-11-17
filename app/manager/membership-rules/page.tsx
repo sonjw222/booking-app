@@ -550,7 +550,7 @@ export default function MembershipRulesPage() {
       ) : products.length === 0 ? (
         <div className="daylist-empty" style={{ paddingTop: 30 }}>
           등록된 수강권이 없어요<br />
-          <span style={{ fontSize: 12 }}>우측 상단 '+ 수강권'으로 추가하세요</span>
+          <span style={{ fontSize: 12 }}>우측 상단 &apos;+ 수강권&apos;으로 추가하세요</span>
         </div>
       ) : (() => {
         const filtered = filteredProducts;
@@ -943,7 +943,7 @@ export default function MembershipRulesPage() {
               const schedule = computeSelectableSchedule(candidateRules);
               return schedule.days.length === 0 ? (
                 <div className="perm-guide" style={{ margin: "4px 0 0" }}>
-                  아직 요일이 지정된 예약조건이 없어요 — {editingId ? "아래" : "저장한 뒤"} "예약조건 추가"에서
+                  아직 요일이 지정된 예약조건이 없어요 — {editingId ? "아래" : "저장한 뒤"} &quot;예약조건 추가&quot;에서
                   회원이 고를 수 있는 요일(과 시간)을 먼저 등록해주세요(예: 월 16:00, 월 20:00, 수 16:00).
                 </div>
               ) : (

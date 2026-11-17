@@ -278,7 +278,7 @@ export default function MyInfoPage() {
             {linkCodeMessage && <div className={`auth-msg ${linkCodeMessage.type}`}>{linkCodeMessage.text}</div>}
             {linkCode && (
               <div className="perm-guide" style={{ margin: "0 0 8px" }}>
-                이 화면에서 로그아웃한 뒤, 합치고 싶은 다른 계정으로 로그인해서 "내 정보 관리"에서
+                이 화면에서 로그아웃한 뒤, 합치고 싶은 다른 계정으로 로그인해서 &quot;내 정보 관리&quot;에서
                 아래에 이 코드를 입력해주세요.
               </div>
             )}

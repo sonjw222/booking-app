@@ -264,7 +264,7 @@ export default function SettingsPage() {
                 화면에서 수동으로 처리해주세요.</div>
               {(s.autocancelHours ?? 0) === 0 && (s.autocancelMinutes ?? 0) === 0 && (
                 <div className="set-soon-note" style={{ color: "var(--warning)" }}>
-                  시간·분이 모두 0이면 "시작 전"이라는 조건 자체가 성립하지 않아 자동 폐강이 실행되지
+                  시간·분이 모두 0이면 &quot;시작 전&quot;이라는 조건 자체가 성립하지 않아 자동 폐강이 실행되지
                   않아요 — 최소 몇 분 이상으로 설정해주세요.
                 </div>
               )}
@@ -352,9 +352,9 @@ export default function SettingsPage() {
               items={[{ value: "usage_split", label: "이용 횟수로 분배" }, { value: "purchase_date_full", label: "구매일에 전액 표시" }]}
               onChange={(value) => up("unlimitedPassRevenueMode", value)} />
             <div className="set-soon-note">
-              "기간 중 이용 횟수로 분배"는 결제금액을 그 수강권으로 실제 이용한 수업 횟수로
+              &quot;기간 중 이용 횟수로 분배&quot;는 결제금액을 그 수강권으로 실제 이용한 수업 횟수로
               나눠 각 수업 날짜에 배분해요(기간이 끝나기 전에는 지금까지의 이용 횟수 기준
-              추정치로 표시되고, 더 이용할수록 자동으로 다시 계산돼요). "구매일에 전액 표시"는
+              추정치로 표시되고, 더 이용할수록 자동으로 다시 계산돼요). &quot;구매일에 전액 표시&quot;는
               수업별로 나누지 않고 결제한 날 하루에 전체 금액을 표시해요.
             </div>
           </div>
