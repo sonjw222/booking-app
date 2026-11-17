@@ -101,7 +101,7 @@ describe.skipIf(!enabled)("NICEPAY TS 라이프사이클 ↔ 실제 PostgreSQL",
     const mid = String((await one(`select membership_id m from payments where order_id=$1`, [oid])).m);
     return { pg, oid, mid };
   }
-  const refundDeps = (pg: FakePg, uid: string): NicepayRefundDeps => ({
+  const refundDeps = (pg: FakePg): NicepayRefundDeps => ({
     port: restRefundPort(CREDS, pg.fetch, () => new Date("2026-10-17T03:00:00Z"), () => {}),
     refundBegin: async (m, u) => { const r = await one(`select pg_refund_begin($1,$2) r`, [m, u]); return r.r as { state: "locked" | "resumed" | "blocked" | "refunded"; reason?: string }; },
     refundRelease: async (m, u) => { try { await c.query(`select pg_refund_release($1,$2)`, [m, u]); return { data: null, error: null }; } catch (e) { return { data: null, error: { message: (e as Error).message } }; } },
@@ -115,7 +115,7 @@ describe.skipIf(!enabled)("NICEPAY TS 라이프사이클 ↔ 실제 PostgreSQL",
     const { pg, oid, mid } = await purchased(12000);
     await c.query(`insert into payments(center_id, profile_id, membership_id, sale_type, total_amount, paid_at, status) values ($1,$2,$3,'new',5000,now() + interval '1 minute','paid')`, [ids.C1, ids.P1, mid]);   // 후속 수기 결제(최신 행)
     const ctx = await ctxOf(mid); expect(ctx).toMatchObject({ provider: "nicepay", amount: 12000, orderId: oid });
-    const r = await handleNicepayRefund(ctx, ids.AUTH, refundDeps(pg, ids.AUTH));
+    const r = await handleNicepayRefund(ctx, ids.AUTH, refundDeps(pg));
     expect(r.status).toBe(200); expect(r.body).toMatchObject({ refunded: true, amount: 12000 });
     expect((await one(`select status from memberships where id=$1`, [mid])).status).toBe("refunded");
     expect(await n(`select count(*)::int n from payments where membership_id=$1 and sale_type='refund' and total_amount=-12000`, [mid])).toBe(1);
@@ -130,18 +130,18 @@ describe.skipIf(!enabled)("NICEPAY TS 라이프사이클 ↔ 실제 PostgreSQL",
   it("환불 중 PG 취소 결과 불명(타임아웃 + 조회 실패) → 내부 환불 없음, 환불 표시 유지 → 복구 후 같은 요청으로 이어서 완료(중복 취소 기록 없음)", async () => {
     const { pg, oid, mid } = await purchased(9000);
     pg.faults = { cancel: "timeout_after", lookup: "fail" };
-    const r = await handleNicepayRefund(await ctxOf(mid), ids.AUTH, refundDeps(pg, ids.AUTH));
+    const r = await handleNicepayRefund(await ctxOf(mid), ids.AUTH, refundDeps(pg));
     expect(r.body.code).toBe("pg_cancel_unknown");
     expect(await one(`select status, pg_refund_started_at is not null as marked from memberships where id=$1`, [mid])).toEqual({ status: "active", marked: true });
     pg.faults = {};
-    expect((await handleNicepayRefund(await ctxOf(mid), ids.AUTH, refundDeps(pg, ids.AUTH))).status).toBe(200);
+    expect((await handleNicepayRefund(await ctxOf(mid), ids.AUTH, refundDeps(pg))).status).toBe(200);
     expect(await n(`select count(*)::int n from nicepay_pg_cancels where order_id=$1`, [oid])).toBe(1);
     expect(await n(`select count(*)::int n from payments where membership_id=$1 and sale_type='refund'`, [mid])).toBe(1);
   });
   it("동시 환불 2건: 환불 행 1개, PG 취소 거래 1건", async () => {
     const { pg, mid } = await purchased(7000);
     const ctx = await ctxOf(mid);
-    const [a, b] = await Promise.all([handleNicepayRefund(ctx, ids.AUTH, refundDeps(pg, ids.AUTH)), handleNicepayRefund(ctx, ids.AUTH, refundDeps(pg, ids.AUTH))]);
+    const [a, b] = await Promise.all([handleNicepayRefund(ctx, ids.AUTH, refundDeps(pg)), handleNicepayRefund(ctx, ids.AUTH, refundDeps(pg))]);
     expect([a.status, b.status]).toContain(200);
     expect(await n(`select count(*)::int n from payments where membership_id=$1 and sale_type='refund'`, [mid])).toBe(1);
     expect([...pg.txs.values()].filter((t) => t.status === "cancelled")).toHaveLength(1);
