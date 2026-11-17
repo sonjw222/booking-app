@@ -19,7 +19,7 @@ export async function fetchHolidays(centerId: string): Promise<Holiday[]> {
     .eq("center_id", centerId)
     .order("holiday_date", { ascending: true });
   if (error) throw new Error("휴무일을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((h: any) => ({
+  return (data ?? []).map((h) => ({
     id: h.id, date: h.holiday_date, reason: h.reason,
   }));
 }

@@ -99,7 +99,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   const { data: myProfiles, error: meErr } = await supabase
     .from("profiles").select("id, is_primary").eq("account_id", account.id).is("deleted_at", null);
   if (meErr || !myProfiles || myProfiles.length === 0) throw new Error("프로필 정보를 찾을 수 없어요");
-  const myProfileIds = myProfiles.map((p: any) => p.id);
+  const myProfileIds = myProfiles.map((p) => p.id);
 
   // 내가 수강권을 보유한 센터 목록 (활성 수강권 기준)
   // ⚠️ classRows/fetchUsableMembershipsByClass와 동일한 이유로 PostgREST 기본 응답 행 수
@@ -125,12 +125,12 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   // show_all_classes=false 센터의 수업 필터링에 쓸 활성 수강권 id 목록(센터별)
   const activeMembershipIdsByCenter: Record<string, string[]> = {};
   for (const m of myMems) {
-    const active = (m as any).status === "active"
-      && ((m as any).remaining_count == null || (m as any).remaining_count > 0)
-      && ((m as any).expires_at == null || (m as any).expires_at >= monthStartDateOnly || new Date((m as any).expires_at) >= new Date());
+    const active = m.status === "active"
+      && (m.remaining_count == null || m.remaining_count > 0)
+      && (m.expires_at == null || m.expires_at >= monthStartDateOnly || new Date(m.expires_at) >= new Date());
     if (active) {
-      myMembershipCenters.add((m as any).center_id);
-      (activeMembershipIdsByCenter[(m as any).center_id] ??= []).push((m as any).id);
+      myMembershipCenters.add(m.center_id);
+      (activeMembershipIdsByCenter[m.center_id] ??= []).push(m.id);
     }
   }
 
@@ -181,7 +181,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
     const { data: settingsRows, error: settingsErr } = await settingsPromise!;
     if (settingsErr) throw new Error("운영 설정을 불러오지 못했어요: " + settingsErr.message);
     const restrictedCenterIds = new Set(
-      (settingsRows ?? []).filter((s: any) => s.show_all_classes === false).map((s: any) => s.center_id)
+      (settingsRows ?? []).filter((s) => s.show_all_classes === false).map((s) => s.center_id)
     );
     if (restrictedCenterIds.size > 0) {
       const restrictedClassRows = filteredClassRows.filter((c) => restrictedCenterIds.has(c.center_id));
@@ -207,7 +207,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   // 빈 값으로 폴백했으므로 에러 처리 동작은 동일하다.
   const earlyCenterMap = new Map<string, true>();
   for (const c of filteredClassRows) {
-    const center = (c as any).centers;
+    const center = c.centers;
     if (center) earlyCenterMap.set(center.id, true);
   }
   const colorRowsPromise = (async () => await supabase
@@ -277,13 +277,13 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
       if (res.error) throw new Error("예약 인원을 불러오지 못했어요: " + res.error.message);
       for (const r of res.data ?? []) {
         reservedCount[r.class_id] = r.confirmed_count;
-        waitlistedCount[r.class_id] = (r as any).waitlisted_count ?? 0;
+        waitlistedCount[r.class_id] = r.waitlisted_count ?? 0;
       }
     }
     for (const res of myChunks) {
       if (res.error) throw new Error("내 예약을 불러오지 못했어요: " + res.error.message);
       for (const r of res.data ?? []) {
-        myByClassProfile[`${r.class_id}:${(r as any).profile_id}`] = {
+        myByClassProfile[`${r.class_id}:${r.profile_id}`] = {
           id: r.id, status: r.status as "confirmed" | "waitlisted",
         };
       }
@@ -297,7 +297,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   // 센터 목록 (수업에서 등장한 센터만) + 내 색상 설정
   const centerMap = new Map<string, { id: string; name: string; categories: string[] }>();
   for (const c of filteredClassRows) {
-    const center = (c as any).centers;
+    const center = c.centers;
     if (center) centerMap.set(center.id, center);
   }
 
@@ -309,7 +309,7 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   const centers: CenterInfo[] = Array.from(centerMap.values()).map((c, i) => ({
     id: c.id,
     name: c.name,
-    categories: (c as any).categories ?? [],
+    categories: c.categories ?? [],
     color: colorByCenter[c.id] ?? DEFAULT_COLORS[i % DEFAULT_COLORS.length],
   }));
 
@@ -321,8 +321,8 @@ export async function fetchMonthData(year: number, month: number, accountId?: st
   if (settingsRowsPromise) {
     const { data: settingsRows } = await settingsRowsPromise;
     for (const s of settingsRows ?? []) {
-      showReservedCountByCenter[(s as any).center_id] = (s as any).show_group_reserved_count ?? true;
-      showWaitlistCountByCenter[(s as any).center_id] = (s as any).show_group_waitlist_count ?? true;
+      showReservedCountByCenter[s.center_id] = s.show_group_reserved_count ?? true;
+      showWaitlistCountByCenter[s.center_id] = s.show_group_waitlist_count ?? true;
       const row = s as { center_id: string; waitlist_weekly_limit?: number | null; allow_same_day_booking?: boolean | null };
       waitlistLimitByCenter[row.center_id] = row.waitlist_weekly_limit ?? null;
       sameDayByCenter[row.center_id] = row.allow_same_day_booking ?? null;
@@ -413,14 +413,14 @@ export async function reserveClass(
       p_goods_membership_id: goodsMembershipId,
     });
     if (error) throw new Error(error.message);
-    return (data as any).status;
+    return data.status;
   }
   const { data, error } = await supabase.rpc("reserve_class", {
     p_class_id: classId,
     p_profile_id: profileId ?? null,
   });
   if (error) throw new Error(error.message);
-  return (data as any).status;
+  return data.status;
 }
 
 // 특정 프로필이 여러 센터에서 보유한 상품(goods) 목록을 한 번에 조회 (예약 확인창 선택용, N+1 방지)
@@ -472,7 +472,7 @@ export async function fetchMyProfiles(accountId?: string): Promise<BookingProfil
     .is("deleted_at", null)
     .order("is_primary", { ascending: false });
   if (error) throw new Error("프로필을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((p: any) => ({
+  return (data ?? []).map((p) => ({
     id: p.id, name: p.name, label: p.label, isPrimary: p.is_primary,
   }));
 }
@@ -486,7 +486,7 @@ export async function cancelReservation(reservationId: string): Promise<{ deduct
     p_reservation_id: reservationId,
   });
   if (error) throw new Error(error.message);
-  return { deducted: !!(data as any)?.deducted };
+  return { deducted: !!data?.deducted };
 }
 
 /* ============================================================
@@ -651,7 +651,7 @@ export async function reserveWithMembership(
     p_class_id: classId, p_profile_id: profileId, p_membership_id: membershipId,
   });
   if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
-  return ((data as any)?.status ?? "confirmed") as "confirmed" | "waitlisted";
+  return (data?.status ?? "confirmed") as "confirmed" | "waitlisted";
 }
 
 // 2026-10-01(QA 5) — 수강권 지정 예약 + 대여상품 사용을 서버의 한 함수(reserve_with_goods,
@@ -679,5 +679,5 @@ export async function reserveWithGoods(
     }
     throw new Error(error.message.replace(/^.*?:\s*/, ""));
   }
-  return ((data as any)?.status ?? "confirmed") as "confirmed" | "waitlisted";
+  return (data?.status ?? "confirmed") as "confirmed" | "waitlisted";
 }

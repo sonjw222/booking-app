@@ -8,6 +8,19 @@
 import { nicepayDiscoveryScope, narrowToReviewCenters } from "./nicepayReviewScope";
 import { supabase } from "./supabaseClient";
 import { getMyAccountId } from "./authAccount";
+import { one, rowsOf } from "./embed";
+
+// fetchManagerThreads 조회 행 — `accounts:member_account_id(...)` 별칭 힌트 때문에 select 결과 타입이 추론되지 않아 직접 선언.
+interface ManagerThreadRow {
+  id: string;
+  center_id: string;
+  member_account_id: string;
+  last_message: string | null;
+  last_message_at: string | null;
+  manager_unread: number | null;
+  centers: { name: string } | null;
+  accounts: Parameters<typeof resolveMemberName>[0];
+}
 
 const KST = new Intl.DateTimeFormat("ko-KR", {
   timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit",
@@ -60,7 +73,7 @@ async function myProfileIds(): Promise<string[]> {
   const accountId = await getMyAccountId();
   if (!accountId) return [];
   const { data: profs } = await supabase.from("profiles").select("id").eq("account_id", accountId).is("deleted_at", null);
-  return (profs ?? []).map((p: any) => p.id);
+  return (profs ?? []).map((p) => p.id);
 }
 
 // 승인된 센터 검색 (문의할 센터를 자유롭게 고를 때)
@@ -70,7 +83,7 @@ export async function searchCentersForInquiry(keyword: string): Promise<Selectab
   if (reviewScope) q = narrowToReviewCenters(q, reviewScope);   // NICEPAY 심사관: 탐색에는 심사 센터 + 허용된 실제 센터만
   if (keyword.trim()) q = q.ilike("name", `%${keyword.trim()}%`);
   const { data } = await q;
-  return (data ?? []).map((c: any) => ({ id: c.id, name: c.name }));
+  return (data ?? []).map((c) => ({ id: c.id, name: c.name }));
 }
 
 // ── 회원: 문의방 열기 (없으면 생성) ──
@@ -87,10 +100,10 @@ export async function fetchMyThreads(): Promise<InquiryThread[]> {
     .select("id, center_id, member_account_id, last_message, last_message_at, member_unread, centers(name)")
     .order("last_message_at", { ascending: false, nullsFirst: false });
   if (error) return [];
-  return (data ?? []).map((r: any) => ({
+  return (data ?? []).map((r) => ({
     id: r.id,
     centerId: r.center_id,
-    centerName: r.centers?.name ?? "센터",
+    centerName: one<{ name: string }>(r.centers)?.name ?? "센터",
     memberAccountId: r.member_account_id,
     lastMessage: r.last_message,
     lastMessageAt: r.last_message_at ? KST.format(new Date(r.last_message_at)) : null,
@@ -113,7 +126,7 @@ export async function fetchCenterThreads(): Promise<InquiryThread[]> {
   // UX 감사(2026-09-06) — 예전엔 에러를 빈 배열로 삼켜서 진짜 오류(RLS, 네트워크)와
   // "문의가 없어요"를 매니저 화면에서 구분할 수 없었다.
   if (error) throw new Error("문의 목록을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((r: any) => ({
+  return rowsOf<ManagerThreadRow>(data).map((r) => ({
     id: r.id,
     centerId: r.center_id,
     centerName: r.centers?.name ?? "센터",
@@ -175,7 +188,7 @@ export async function fetchMessages(threadId: string, myAccountId?: string | nul
   if (error) throw new Error("메시지를 불러오지 못했어요: " + error.message);
   // 최신순으로 가져왔으니(위 limit이 "최근 N개"를 뜻하려면 desc여야 함) 화면 표시
   // 순서(과거→최신)로 뒤집는다.
-  return (data ?? []).reverse().map((m: any) => mapInquiryMessageRow(m, resolvedAccountId));
+  return (data ?? []).reverse().map((m) => mapInquiryMessageRow(m, resolvedAccountId));
 }
 
 // ── 메시지 전송 ──

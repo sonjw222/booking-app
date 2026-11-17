@@ -10,6 +10,7 @@ import { toKstIso } from "./kst";
 import { appendTrainerNames } from "./instructorDisplay";
 
 import { todayKstYmd } from "./membershipExpiry";
+import { one, rowsOf } from "./embed";
 export type ManagedClass = {
   id: string;
   title: string;
@@ -294,7 +295,7 @@ export async function updateClass(classId: string, input: ClassInput): Promise<{
     p_allow_cancel: input.allowCancel ?? true,
   });
   if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
-  return { promotedCount: (data as any)?.promoted_count ?? 0 };
+  return { promotedCount: data?.promoted_count ?? 0 };
 }
 
 // 반복 그룹 일괄 적용(updateClassGroup)은 title/start/end/capacity만 바꾸고 이 인스턴스의
@@ -696,7 +697,7 @@ export async function fetchClassAttendees(classId: string): Promise<ClassAttende
     ({ data, error } = await run(base));
   }
   if (error) throw new Error("예약자 명단을 불러오지 못했어요: " + error.message);
-  return ((data ?? []) as any[]).map((r: any) => ({
+  return ((data ?? []) as any[]).map((r) => ({
     reservationId: r.id,
     profileId: r.profile_id,
     name: r.profiles?.name ?? "(이름 없음)",
@@ -731,7 +732,7 @@ export async function fetchClassProducts(classId: string): Promise<string[]> {
   if (error) {
     throw new Error("수업 수강권을 불러오지 못했어요: " + error.message);
   }
-  return (data ?? []).map((r: any) => r.product_id);
+  return (data ?? []).map((r) => r.product_id);
 }
 
 // 수업의 예약가능 수강권을 통째로 교체 (선택된 id 배열로)
@@ -783,7 +784,7 @@ export async function fetchClassTrainers(classId: string): Promise<string[]> {
     ({ data, error } = await supabase.from("class_trainers").select("account_id").eq("class_id", classId));
   }
   if (error) throw new Error("담당 강사를 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((r: any) => r.account_id);
+  return (data ?? []).map((r) => r.account_id);
 }
 
 // 수업의 담당 강사를 통째로 교체 (선택된 account_id 배열로)
@@ -838,14 +839,14 @@ export async function fetchExistingClassOptions(centerId: string): Promise<Exist
   const seen = new Set<string>();
   const out: ExistingClassOption[] = [];
   for (const c of data ?? []) {
-    const d = new Date((c as any).start_time);
+    const d = new Date(c.start_time);
     // KST 기준 요일/시간
     const kstDow = new Date(d.toLocaleString("en-US", { timeZone: "Asia/Seoul" })).getDay();
     const kstTime = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
-    const key = `${(c as any).title}|${kstDow}|${kstTime}`;
+    const key = `${c.title}|${kstDow}|${kstTime}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ title: (c as any).title, dayOfWeek: kstDow, startTime: kstTime });
+    out.push({ title: c.title, dayOfWeek: kstDow, startTime: kstTime });
   }
   return out;
 }
@@ -854,7 +855,7 @@ export async function fetchExistingClassOptions(centerId: string): Promise<Exist
 export async function fetchCenterHolidayDates(centerId: string): Promise<Set<string>> {
   const { data } = await supabase
     .from("center_holidays").select("holiday_date").eq("center_id", centerId);
-  return new Set((data ?? []).map((h: any) => h.holiday_date));
+  return new Set((data ?? []).map((h) => h.holiday_date));
 }
 
 /* ============================================================
@@ -880,7 +881,7 @@ export async function fetchBookableMembers(centerId: string): Promise<BookableMe
     .order("registered_at", { ascending: false })
     .limit(300);
 
-  const profileIds = (cms ?? []).map((c: any) => c.profile_id);
+  const profileIds = (cms ?? []).map((c) => c.profile_id);
   if (profileIds.length === 0) return [];
 
   const { data: mems } = await supabase
@@ -892,17 +893,17 @@ export async function fetchBookableMembers(centerId: string): Promise<BookableMe
 
   const byProfile: Record<string, { id: string; name: string; remaining: number | null }[]> = {};
   for (const m of mems ?? []) {
-    (byProfile[(m as any).profile_id] ??= []).push({
-      id: (m as any).id,
-      name: (m as any).product_name,
-      remaining: (m as any).remaining_count,
+    (byProfile[m.profile_id] ??= []).push({
+      id: m.id,
+      name: m.product_name,
+      remaining: m.remaining_count,
     });
   }
 
-  return (cms ?? []).map((c: any) => ({
+  return (cms ?? []).map((c) => ({
     profileId: c.profile_id,
-    name: c.profiles?.name ?? "(이름 없음)",
-    phone: c.profiles?.accounts?.phone ?? null,
+    name: one<{ name: string }>(c.profiles)?.name ?? "(이름 없음)",
+    phone: one<{ accounts?: { phone: string | null } | null }>(c.profiles)?.accounts?.phone ?? null,
     memberStatus: c.status ?? "active",
     memberships: byProfile[c.profile_id] ?? [],
   }));
@@ -929,8 +930,8 @@ export async function managerBookMember(
   });
   if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
   return {
-    overCapacity: (data as any)?.over_capacity ?? false,
-    deducted: (data as any)?.deducted ?? false,
+    overCapacity: data?.over_capacity ?? false,
+    deducted: data?.deducted ?? false,
   };
 }
 
@@ -989,10 +990,29 @@ export function unplacedReasonText(u: Pick<UnplacedPass, "reason" | "remainingCo
   }
 }
 
+// unplaced_weekday_passes RPC 결과 행(옛 RPC에는 expired/can_retry/reason_code/placeable_count가 없을 수 있다).
+interface UnplacedPassRow {
+  membership_id: string;
+  profile_id: string;
+  member_name: string;
+  product_name: string;
+  total_count: number | null;
+  remaining_count: number;
+  auto_book_days: number[] | null;
+  expires_at: string | null;
+  purchased_at: string;
+  bound_day_of_week: number | null;
+  bound_start_time: string | null;
+  expired?: boolean | null;
+  can_retry?: boolean | null;
+  reason_code?: string | null;
+  placeable_count?: number | null;
+}
+
 export async function fetchUnplacedPasses(centerId: string): Promise<UnplacedPass[]> {
   const { data, error } = await supabase.rpc("unplaced_weekday_passes", { p_center_id: centerId });
   if (error) throw new Error("미배치 수강권을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((r: any) => ({
+  return rowsOf<UnplacedPassRow>(data).map((r) => ({
     membershipId: r.membership_id,
     profileId: r.profile_id,
     memberName: r.member_name,
@@ -1016,7 +1036,7 @@ export async function fetchUnplacedPasses(centerId: string): Promise<UnplacedPas
 export async function retryAutoBook(membershipId: string): Promise<number> {
   const { data, error } = await supabase.rpc("retry_auto_book_membership_safe", { p_membership_id: membershipId });
   if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
-  return (data as any)?.booked ?? 0;
+  return data?.booked ?? 0;
 }
 
 /* ============================================================
@@ -1200,7 +1220,7 @@ export async function copyByDate(
 export async function fetchClassPassSelectionMode(classId: string): Promise<"all" | "selected"> {
   const { data, error } = await supabase.from("classes").select("pass_selection_mode").eq("id", classId).maybeSingle();
   if (error || !data) return "all";
-  return ((data as any).pass_selection_mode ?? "all") as "all" | "selected";
+  return (data.pass_selection_mode ?? "all") as "all" | "selected";
 }
 
 // 공통: 삽입 + 수강권/강사 연결 복사

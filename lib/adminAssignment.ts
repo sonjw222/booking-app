@@ -6,6 +6,7 @@
 
 import { supabase } from "./supabaseClient";
 import type { AdminReasonCode, ReservationSource, ReservationType } from "./reservationTypes";
+import { one } from "./embed";
 
 export type AssignmentType = Extract<ReservationType, "ADMIN_ASSIGNMENT" | "ADMIN_FREE">;
 
@@ -54,7 +55,7 @@ export async function cancelAdminReservation(reservationId: string, cancelReason
     p_cancel_reason: cancelReason ?? null,
   });
   if (error) throw new Error(error.message.replace(/^.*?:\s*/, ""));
-  return { restored: (data as any)?.restored ?? false };
+  return { restored: data?.restored ?? false };
 }
 
 export type AdminActionLog = {
@@ -116,14 +117,14 @@ export async function fetchAdminActionLogs(
   const { data, error } = await query;
   if (error) throw new Error("배치 로그를 불러오지 못했어요: " + error.message);
 
-  return (data ?? []).map((r: any) => ({
+  return (data ?? []).map((r) => ({
     id: r.id,
     reservationId: r.reservation_id,
     actionType: r.action_type,
     reservationType: r.reservation_type,
     reservationSource: r.reservation_source,
     adminId: r.admin_id,
-    adminName: r.accounts?.name ?? "(알 수 없음)",
+    adminName: one<{ name: string }>(r.accounts)?.name ?? "(알 수 없음)",
     memberProfileId: r.member_profile_id,
     memberName: r.member_name_snapshot ?? "(이름 없음)",
     classId: r.class_id,

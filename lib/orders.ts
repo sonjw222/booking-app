@@ -5,12 +5,49 @@
   - 매니저가 주문 확인/완료 처리
 */
 
+import { omitKeys } from "./objectUtil";
 import { isFixedExpiryPassed, kstToday } from "./servicePeriod";
 import { supabase } from "./supabaseClient";
 import { getMyAccountId } from "./authAccount";
 import { countKind, usageState, type CountKind, type UsageState } from "./membershipStatus";
 import { todayKstYmd } from "./membershipExpiry";
 import { fetchMembershipOrigins, FREE_GRANT_REFUND_NOTE, type MembershipOrigin } from "./membershipOrigin";
+import { queryOf } from "./embed";
+
+// orders 조회 행(컬럼 폴백 때문에 select 문자열이 동적이라 직접 선언한다).
+interface OrderRow {
+  id: string;
+  center_id: string;
+  profile_id: string;
+  product_id: string | null;
+  product_name: string;
+  amount: number;
+  pay_method: string | null;
+  status: Order["status"];
+  created_at: string;
+  paid_at: string | null;
+  selected_count?: number | null;
+  selected_size?: string | null;
+  centers?: { name: string } | null;
+  profiles?: { name: string; accounts?: { phone: string | null } | null } | null;
+}
+
+// memberships 조회 행(내 구매내역).
+interface PurchaseMembershipRow {
+  id: string;
+  center_id: string;
+  product_id: string | null;
+  product_name: string;
+  total_count: number | null;
+  remaining_count: number | null;
+  expires_at?: string | null;
+  starts_at?: string | null;
+  status: string;
+  created_at: string;
+  selected_size?: string | null;
+  centers?: { name: string } | null;
+  products?: { product_kind?: string | null; unlimited?: boolean | null; unlimited_pass?: boolean | null } | null;
+}
 
 export type Order = {
   id: string;
@@ -105,7 +142,7 @@ export async function createOrder(input: {
     // (lib/rooms.ts/lib/passes.ts와 동일 패턴). 이 경우 요일/시간 선택 자체는 화면에서
     // 막히지 않지만(체크아웃 UI가 여전히 선택을 받음) 그 선택값은 저장되지 않는다 —
     // 주문 생성 자체가 막히는 것보다 훨씬 안전한 실패 방향.
-    const { selected_day_of_week, selected_start_time, selected_count, ...withoutWeekday } = row;
+    const withoutWeekday = omitKeys(row, ["selected_day_of_week", "selected_start_time", "selected_count"]);
     ({ data, error } = await supabase.from("orders").insert(withoutWeekday).select("id").single());
   }
   // RLS 위반(42501)은 구매 자격이 없는 경우다 — 판매 기간(고정 만료일)이 지났거나 판매가 중지된 상품, 공개 범위 밖 상품. 서버 정책 메시지 대신 안내 문구를 쓴다.
@@ -118,8 +155,8 @@ export async function createOrder(input: {
 export async function fetchMyOrders(): Promise<Order[]> {
   const myCols = "id, center_id, profile_id, product_id, product_name, amount, pay_method, status, created_at, paid_at, centers(name)";
   const runMy = (cols: string) => supabase.from("orders").select(cols).order("created_at", { ascending: false });
-  let { data, error } = (await runMy(`${myCols}, selected_count, selected_size`)) as any;
-  if (error?.code === "42703") ({ data, error } = (await runMy(myCols)) as any);
+  let { data, error } = queryOf<OrderRow>(await runMy(`${myCols}, selected_count, selected_size`));
+  if (error?.code === "42703") ({ data, error } = queryOf<OrderRow>(await runMy(myCols)));
   if (error) throw new Error("주문 내역을 불러오지 못했어요: " + error.message);
   return (data ?? []).map(mapOrder);
 }
@@ -136,10 +173,10 @@ export async function fetchCenterOrders(centerId: string, status?: string): Prom
     return q.limit(1000);
   };
   // 구매 횟수/사이즈(2026-10-01) 컬럼이 없는 환경(42703)은 기존 컬럼만으로 다시 조회
-  let { data, error } = (await build(`${centerCols}, selected_count, selected_size`)) as any;
-  if (error?.code === "42703") ({ data, error } = (await build(centerCols)) as any);
+  let { data, error } = queryOf<OrderRow>(await build(`${centerCols}, selected_count, selected_size`));
+  if (error?.code === "42703") ({ data, error } = queryOf<OrderRow>(await build(centerCols)));
   if (error) throw new Error("주문을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((o: any) => ({
+  return (data ?? []).map((o) => ({
     ...mapOrder(o),
     memberName: o.profiles?.name ?? "회원",
     memberPhone: o.profiles?.accounts?.phone ?? null,
@@ -184,15 +221,15 @@ export function fulfillResultMessage(r: FulfillOrderResult | undefined): string 
   return `${base}. ${booked}했어요.`;
 }
 
-function mapFulfillResult(d: any): FulfillOrderResult {
+function mapFulfillResult(d: Record<string, unknown> | null | undefined): FulfillOrderResult {
   return {
     alreadyDone: !!d?.already_done,
-    membershipId: d?.membership_id ?? null,
+    membershipId: (d?.membership_id as string | null | undefined) ?? null,
     autoBookRequested: !!d?.auto_book_requested,
-    autoBookedCount: d?.auto_booked_count ?? 0,
-    unplacedCount: d?.unplaced_count ?? null,
-    autoBookReason: d?.auto_book_reason ?? null,
-    autoBookError: d?.auto_book_error ?? null,
+    autoBookedCount: (d?.auto_booked_count as number | undefined) ?? 0,
+    unplacedCount: (d?.unplaced_count as number | null | undefined) ?? null,
+    autoBookReason: (d?.auto_book_reason as FulfillOrderResult["autoBookReason"] | undefined) ?? null,
+    autoBookError: (d?.auto_book_error as string | null | undefined) ?? null,
   };
 }
 
@@ -302,7 +339,7 @@ export async function cancelMyPendingOrderQuietly(orderId: string | null | undef
   }
 }
 
-function mapOrder(o: any): Order & { centerName?: string } {
+function mapOrder(o: OrderRow): Order & { centerName?: string } {
   return {
     id: o.id, centerId: o.center_id, profileId: o.profile_id,
     productId: o.product_id, productName: o.product_name, amount: o.amount,
@@ -354,33 +391,33 @@ export async function fetchMyPurchases(): Promise<PurchaseItem[]> {
   const accountId = await getMyAccountId();
   if (!accountId) return [];
   const { data: profs } = await supabase.from("profiles").select("id").eq("account_id", accountId).is("deleted_at", null);
-  const profileIds = (profs ?? []).map((p: any) => p.id);
+  const profileIds = (profs ?? []).map((p) => p.id);
   if (profileIds.length === 0) return [];
 
   // 발급된 수강권 (환불 가능 판단 대상)
   const memCols = "id, center_id, product_id, product_name, total_count, remaining_count, expires_at, starts_at, status, created_at, centers(name), products(product_kind, unlimited, unlimited_pass)";
   const runMem = (cols: string) => supabase.from("memberships").select(cols)
     .in("profile_id", profileIds).order("created_at", { ascending: false }).limit(100);
-  let { data: mems, error: memsErr } = (await runMem(`${memCols}, selected_size`)) as any;
-  if (memsErr?.code === "42703") ({ data: mems } = (await runMem(memCols)) as any);
+  let { data: mems, error: memsErr } = queryOf<PurchaseMembershipRow>(await runMem(`${memCols}, selected_size`));
+  if (memsErr?.code === "42703") ({ data: mems } = queryOf<PurchaseMembershipRow>(await runMem(memCols)));
 
   // 주문 (아직 발급 안 된 것 포함)
   const ordCols = "id, center_id, product_name, amount, status, created_at, centers(name)";
   const runOrd = (cols: string) => supabase.from("orders").select(cols)
     .in("profile_id", profileIds).order("created_at", { ascending: false }).limit(100);
-  let { data: ords, error: ordsErr } = (await runOrd(`${ordCols}, selected_count, selected_size`)) as any;
-  if (ordsErr?.code === "42703") ({ data: ords } = (await runOrd(ordCols)) as any);
+  let { data: ords, error: ordsErr } = queryOf<OrderRow>(await runOrd(`${ordCols}, selected_count, selected_size`));
+  if (ordsErr?.code === "42703") ({ data: ords } = queryOf<OrderRow>(await runOrd(ordCols)));
 
   const out: PurchaseItem[] = [];
   const origins = await fetchMembershipOrigins((mems ?? []).map((m: { id: string }) => m.id));
 
   for (const m of mems ?? []) {
-    const created = (m as any).created_at;
+    const created = m.created_at;
     const hours = (Date.now() - new Date(created).getTime()) / 3600000;
-    const total = (m as any).total_count;
-    const remain = (m as any).remaining_count;
+    const total = m.total_count;
+    const remain = m.remaining_count;
     const used = total != null && remain != null && remain !== total;
-    const st = (m as any).status;
+    const st = m.status;
     const prod = (m as { products?: { product_kind?: string; unlimited?: boolean; unlimited_pass?: boolean } | null }).products;
     const countInput = { productKind: prod?.product_kind, unlimitedPass: prod?.unlimited_pass, unlimitedGoods: prod?.unlimited, totalCount: total, remainingCount: remain };
 
@@ -395,17 +432,17 @@ export async function fetchMyPurchases(): Promise<PurchaseItem[]> {
 
     // 같은 주문에서 온 금액 찾기 (없으면 0)
     const matched = (ords ?? []).find(
-      (o: any) => o.center_id === (m as any).center_id && o.product_name === (m as any).product_name && o.status === "done"
+      (o) => o.center_id === m.center_id && o.product_name === m.product_name && o.status === "done"
     );
 
     out.push({
-      id: (m as any).id,
-      orderId: matched ? (matched as any).id : null,
-      membershipId: (m as any).id,
-      centerId: (m as any).center_id,
-      centerName: (m as any).centers?.name ?? "센터",
-      productName: (m as any).product_name,
-      amount: matched ? (matched as any).amount : 0,
+      id: m.id,
+      orderId: matched ? matched.id : null,
+      membershipId: m.id,
+      centerId: m.center_id,
+      centerName: m.centers?.name ?? "센터",
+      productName: m.product_name,
+      amount: matched ? matched.amount : 0,
       amountKnown: !!matched,
       origin,
       status: st,
@@ -415,7 +452,7 @@ export async function fetchMyPurchases(): Promise<PurchaseItem[]> {
       selectedSize: (m as any).selected_size ?? null,
       refundable, refundReason: reason,
       cancellable: false, // 이미 발급됨 — 취소가 아니라 환불(refundable) 경로
-      kind: ((m as any).products?.product_kind === "goods" ? "goods" : "pass"),
+      kind: (m.products?.product_kind === "goods" ? "goods" : "pass"),
       usage: usageState({ ...countInput, status: st, expiresAt: (m as { expires_at?: string | null }).expires_at, startsAt: (m as { starts_at?: string | null }).starts_at }, todayKstYmd()),
       countKind: countKind(countInput),
     });
@@ -423,26 +460,26 @@ export async function fetchMyPurchases(): Promise<PurchaseItem[]> {
 
   // 아직 발급 안 된 주문(대기중)도 표시
   for (const o of ords ?? []) {
-    if ((o as any).status === "done") continue;   // 발급된 건 위에서 처리
+    if (o.status === "done") continue;   // 발급된 건 위에서 처리
     // P1-2: pending/paid(= 아직 매니저가 처리 전)는 회원이 직접 취소할 수 있다
     // (add_order_self_cancel.sql의 "주문 본인 취소" RLS 정책). cancelled는 이미 취소된
     // 것이라 다시 취소 버튼을 보여줄 필요 없음.
-    const st = (o as any).status;
+    const st = o.status;
     const cancellable = st === "pending" || st === "paid";
     out.push({
-      id: (o as any).id,
-      orderId: (o as any).id,
+      id: o.id,
+      orderId: o.id,
       membershipId: null,
-      centerId: (o as any).center_id,
-      centerName: (o as any).centers?.name ?? "센터",
-      productName: (o as any).product_name,
-      amount: (o as any).amount,
+      centerId: o.center_id,
+      centerName: o.centers?.name ?? "센터",
+      productName: o.product_name,
+      amount: o.amount,
       status: st,
-      purchasedAt: KST_DT_FULL.format(new Date((o as any).created_at)),
-      createdAtIso: (o as any).created_at,
+      purchasedAt: KST_DT_FULL.format(new Date(o.created_at)),
+      createdAtIso: o.created_at,
       // 미발급 주문: 구매 횟수 선택형이면 고른 횟수/사이즈를 보여준다("5회 · 240mm").
-      totalCount: (o as any).selected_count ?? null, remainingCount: null,
-      selectedSize: (o as any).selected_size ?? null,
+      totalCount: o.selected_count ?? null, remainingCount: null,
+      selectedSize: o.selected_size ?? null,
       refundable: false,
       refundReason: cancellable ? "" : "취소된 주문이에요",
       cancellable,

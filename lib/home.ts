@@ -10,6 +10,7 @@ import { supabase } from "./supabaseClient";
 import { getMyAccountId } from "./authAccount";
 
 import { todayKstYmd } from "./membershipExpiry";
+import { one } from "./embed";
 // QA Fix Batch(2026-09-18) — "내 주변 센터" 반경(km). 감사 결과 이 앱에는 센터별/회원별로
 // 설정 가능한 검색 반경 컬럼이나 화면이 없다(center_settings, app 설정 어디에도 없음 —
 // Business Scenario E2E Phase 3에서 이미 확인됨). 그래서 제품에 적합한 기본값을 여기
@@ -127,7 +128,7 @@ export async function fetchHomeCenters(userLat?: number, userLng?: number): Prom
     .limit(30);
   if (error) throw new Error("센터를 불러오지 못했어요: " + error.message);
 
-  let centers: HomeCenter[] = (data ?? []).map((c: any) => ({
+  let centers: HomeCenter[] = (data ?? []).map((c) => ({
     id: c.id, name: c.name, categories: c.categories ?? [],
     // 좌표 값이 숫자가 아니면(잘못된 데이터, 문자열 "NaN" 등) 그 센터만 "좌표 없음"으로
     // 안전하게 처리한다 — 목록 전체가 죽으면 안 된다(추가 시나리오 9번).
@@ -174,7 +175,7 @@ export async function fetchHomeClasses(): Promise<HomeClass[]> {
   if (error) throw new Error("수업을 불러오지 못했어요: " + error.message);
 
   const rows = data ?? [];
-  const ids = rows.map((r: any) => r.id);
+  const ids = rows.map((r) => r.id);
 
   // 예약 인원
   const counts: Record<string, number> = {};
@@ -183,14 +184,14 @@ export async function fetchHomeClasses(): Promise<HomeClass[]> {
       .from("class_reservation_counts")
       .select("class_id, confirmed_count")
       .in("class_id", ids);
-    for (const c of cnt ?? []) counts[(c as any).class_id] = (c as any).confirmed_count;
+    for (const c of cnt ?? []) counts[c.class_id] = c.confirmed_count;
   }
 
-  return rows.map((r: any) => ({
+  return rows.map((r) => ({
     id: r.id,
     title: r.title,
     centerId: r.center_id,
-    centerName: r.centers?.name ?? "",
+    centerName: one<{ name: string }>(r.centers)?.name ?? "",
     startText: KST_DT.format(new Date(r.start_time)),
     reserved: counts[r.id] ?? 0,
     capacity: r.capacity,
@@ -284,7 +285,7 @@ export async function searchHome(keyword: string): Promise<{ centers: SearchCent
   ]);
   if (catLabelError) throw new Error("검색에 실패했어요: " + catLabelError.message);
   const categories = (cats ?? [])
-    .map((c: any) => c.label)
+    .map((c) => c.label)
     .filter((label: string) => label.includes(kw));
 
   let categoryQuery = categories.length > 0
@@ -329,7 +330,7 @@ export async function fetchCentersByCategory(category: string): Promise<SearchCe
   const { data, error } = await kq
     .order("created_at", { ascending: false });   // 추천순(기본)을 새로고침해도 같은 순서로 고정
   if (error) throw new Error("센터를 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((c: any) => ({
+  return (data ?? []).map((c) => ({
     id: c.id, name: c.name, categories: c.categories ?? [],
     intro: c.intro, address: c.address ?? null, photoUrl: c.photo_url,
     latitude: typeof c.latitude === "number" ? c.latitude : null,
@@ -362,10 +363,10 @@ export async function fetchMyUpcomingClasses(
     .eq("status", "active");
   const passCenters = new Set<string>();
   for (const m of mems ?? []) {
-    const ok = (m as any).products?.product_kind !== "goods"
-      && ((m as any).remaining_count == null || (m as any).remaining_count > 0)
-      && (!(m as any).expires_at || (m as any).expires_at >= today);
-    if (ok) passCenters.add((m as any).center_id);
+    const ok = one<{ product_kind: string }>(m.products)?.product_kind !== "goods"
+      && (m.remaining_count == null || m.remaining_count > 0)
+      && (!m.expires_at || m.expires_at >= today);
+    if (ok) passCenters.add(m.center_id);
   }
   if (passCenters.size === 0) return [];
 
@@ -385,19 +386,19 @@ export async function fetchMyUpcomingClasses(
   if (error) throw new Error("수업을 불러오지 못했어요: " + error.message);
 
   const rows = data ?? [];
-  const ids = rows.map((r: any) => r.id);
+  const ids = rows.map((r) => r.id);
   const counts: Record<string, number> = {};
   if (ids.length > 0) {
     const { data: cnt } = await supabase
       .from("class_reservation_counts").select("class_id, confirmed_count").in("class_id", ids);
-    for (const c of cnt ?? []) counts[(c as any).class_id] = (c as any).confirmed_count;
+    for (const c of cnt ?? []) counts[c.class_id] = c.confirmed_count;
   }
 
-  return rows.map((r: any) => ({
+  return rows.map((r) => ({
     id: r.id,
     title: r.title,
     centerId: r.center_id,
-    centerName: r.centers?.name ?? "",
+    centerName: one<{ name: string }>(r.centers)?.name ?? "",
     startText: KST_DT.format(new Date(r.start_time)),
     reserved: counts[r.id] ?? 0,
     capacity: r.capacity,

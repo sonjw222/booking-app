@@ -34,7 +34,7 @@ export async function fetchCategories(): Promise<ServiceCategory[]> {
     .select("id, label, emoji, sort_order")
     .order("sort_order", { ascending: true });
   if (error) throw new Error("종목을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((c: any) => ({ id: c.id, label: c.label, emoji: c.emoji, sortOrder: c.sort_order }));
+  return (data ?? []).map((c) => ({ id: c.id, label: c.label, emoji: c.emoji, sortOrder: c.sort_order }));
 }
 
 export async function addCategory(label: string, emoji: string): Promise<void> {
@@ -59,7 +59,7 @@ export async function fetchBanners(activeOnly = false): Promise<HomeBanner[]> {
   if (activeOnly) q = q.eq("is_active", true);
   const { data, error } = await q;
   if (error) throw new Error("배너를 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((b: any) => ({
+  return (data ?? []).map((b) => ({
     id: b.id, title: b.title, subtitle: b.subtitle, emoji: b.emoji,
     linkUrl: b.link_url, isActive: b.is_active, sortOrder: b.sort_order,
   }));

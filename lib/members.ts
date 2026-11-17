@@ -6,6 +6,7 @@
   - CSV(엑셀) 내보내기용 데이터
 */
 
+import { one } from "./embed";
 import { displayMemberName } from "./memberName";
 import { supabase } from "./supabaseClient";
 import { fetchAllPages, fetchByIdChunks } from "./memberList";
@@ -69,7 +70,7 @@ export async function fetchGrades(centerId: string): Promise<Grade[]> {
     .eq("center_id", centerId)
     .order("sort_order");
   if (error) throw new Error("등급을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((g: any) => ({ id: g.id, name: g.name, color: g.color }));
+  return (data ?? []).map((g) => ({ id: g.id, name: g.name, color: g.color }));
 }
 
 export async function createGrade(centerId: string, name: string, color: string): Promise<void> {
@@ -110,7 +111,7 @@ export async function fetchMemberBase(centerId: string, filter: Pick<MemberFilte
     },
     { key: (r) => r.id, errorLabel: "회원 목록을 불러오지 못했어요" },
   );
-  const profileIds = Array.from(new Set<string>(rows.map((r: any) => r.profile_id)));
+  const profileIds = Array.from(new Set<string>(rows.map((r) => r.profile_id)));
 
   // 주소는 accounts에 있음 (center_members → profiles → accounts 임베드). 전화번호는 여기서 같이 select하지
   // 않고 customer.member.phone 권한을 서버에서 확인하는 별도 RPC로만 받아온다 —
@@ -144,26 +145,26 @@ export async function fetchMemberBase(centerId: string, filter: Pick<MemberFilte
   ]);
   for (const row of phoneRows) phoneByProfile[row.profile_id] = row.account_phone ?? null;
   for (const m of passRows) {
-    const pid = (m as any).profile_id;
+    const pid = m.profile_id;
     const st = passStateByProfile[pid] ??= { hasUsable: false, hasAny: false };
     st.hasAny = true;
     // 사용 가능한 수강권인지: status active + (기간권이면 만료 전 / 횟수권이면 잔여>0)
-    const active = (m as any).status === "active";
-    const notExpired = !(m as any).expires_at || (m as any).expires_at >= nowIso.slice(0, 10);
-    const remaining = (m as any).remaining_count;
+    const active = m.status === "active";
+    const notExpired = !m.expires_at || m.expires_at >= nowIso.slice(0, 10);
+    const remaining = m.remaining_count;
     const hasCount = remaining == null || remaining > 0;
     if (active && notExpired && hasCount) st.hasUsable = true;
     // 대표 표시용 수강권 (사용가능한 것 우선, 없으면 첫 번째)
     if (!passByProfile[pid] || (active && notExpired && hasCount)) {
       passByProfile[pid] = {
-        name: (m as any).product_name,
-        remaining: (m as any).remaining_count,
-        expires: (m as any).expires_at,
+        name: m.product_name,
+        remaining: m.remaining_count,
+        expires: m.expires_at,
       };
     }
   }
 
-  return rows.map((r: any) => {
+  return rows.map((r) => {
     const st = passStateByProfile[r.profile_id];
     // 상태 계산: 수동 휴면(dormant) 우선 > 사용가능 수강권 있으면 이용중 > 수강권 있으나 소진/만료면 만료
     let derived: "active" | "expired" | "dormant";
@@ -335,14 +336,14 @@ export async function syncMembersFromReservations(centerId: string): Promise<num
     .select("profile_id, classes!inner(center_id)")
     .eq("classes.center_id", centerId);
 
-  const fromResv = Array.from(new Set((resv ?? []).map((r: any) => r.profile_id)));
+  const fromResv = Array.from(new Set((resv ?? []).map((r) => r.profile_id)));
   if (fromResv.length === 0) return 0;
 
   const { data: existing } = await supabase
     .from("center_members")
     .select("profile_id")
     .eq("center_id", centerId);
-  const have = new Set((existing ?? []).map((r: any) => r.profile_id));
+  const have = new Set((existing ?? []).map((r) => r.profile_id));
 
   const missing = fromResv.filter((pid) => !have.has(pid));
   if (missing.length === 0) return 0;
@@ -450,7 +451,7 @@ export async function fetchMemberDetail(profileId: string, centerId: string): Pr
   }
 
   // 각 수강권의 종류(수강권/상품) 파악
-  const prodIds = Array.from(new Set((mem ?? []).map((m: any) => m.product_id).filter(Boolean)));
+  const prodIds = Array.from(new Set((mem ?? []).map((m) => m.product_id).filter(Boolean)));
   const kindById: Record<string, string> = {};
   const unlimitedById: Record<string, boolean> = {};   // F17: 수강권=unlimited_pass, 상품=unlimited
   if (prodIds.length > 0) {
@@ -465,26 +466,26 @@ export async function fetchMemberDetail(profileId: string, centerId: string): Pr
   const fmt = (iso: string) => KST_MD2.format(new Date(iso));
 
   return {
-    reservations: (resv ?? []).filter((r: any) => r.classes).map((r: any) => ({
+    reservations: (resv ?? []).filter((r) => r.classes).map((r) => ({
       id: r.id,
-      title: r.classes?.title ?? "",
-      date: fmt(r.classes.start_time),
+      title: one<{ title: string; start_time: string }>(r.classes)?.title ?? "",
+      date: fmt(one<{ title: string; start_time: string }>(r.classes)!.start_time),
       status: r.status,
     })),
-    progress: (prog ?? []).map((p: any) => ({
+    progress: (prog ?? []).map((p) => ({
       id: p.id,
-      skill: p.progress_categories?.name ?? "",
+      skill: one<{ name: string }>(p.progress_categories)?.name ?? "",
       date: p.lesson_date?.slice(5).replace("-", "/") ?? "",
       note: p.note ?? null,
     })),
-    payments: (pay ?? []).map((p: any) => ({
+    payments: (pay ?? []).map((p) => ({
       id: p.id,
       amount: p.total_amount,
       unpaid: p.unpaid_amount ?? 0,
       saleType: p.sale_type,
       date: p.paid_at ? fmt(p.paid_at) : "",
     })),
-    activePasses: (mem ?? []).map((m: any) => ({
+    activePasses: (mem ?? []).map((m) => ({
       id: m.id,
       name: m.product_name,
       remaining: m.remaining_count,
@@ -494,13 +495,13 @@ export async function fetchMemberDetail(profileId: string, centerId: string): Pr
       selectedSize: m.selected_size ?? null,
     })),
     profileInfo: prof ? {
-      birthDate: (prof as any).birth_date ?? null,
-      gender: (prof as any).gender ?? null,
-      shoeSize: (prof as any).shoe_size ?? null,
-      clothSize: (prof as any).cloth_size ?? null,
-      address: (prof as any).address ?? null,
+      birthDate: prof.birth_date ?? null,
+      gender: prof.gender ?? null,
+      shoeSize: prof.shoe_size ?? null,
+      clothSize: prof.cloth_size ?? null,
+      address: prof.address ?? null,
       phone,
-      memo: (prof as any).memo ?? null,
+      memo: prof.memo ?? null,
     } : null,
   };
 }
@@ -622,9 +623,9 @@ async function legacyExtendPassesAfterDormant(cm: { center_id: string; profile_i
     .eq("center_id", cm.center_id)
     .eq("status", "active");
   for (const p of periodPasses ?? []) {
-    if ((p as any).expires_at) {
-      const newExp = new Date(new Date((p as any).expires_at).getTime() + dormantDays * 86400000);
-      await supabase.from("memberships").update({ expires_at: newExp.toISOString().slice(0, 10) }).eq("id", (p as any).id);
+    if (p.expires_at) {
+      const newExp = new Date(new Date(p.expires_at).getTime() + dormantDays * 86400000);
+      await supabase.from("memberships").update({ expires_at: newExp.toISOString().slice(0, 10) }).eq("id", p.id);
     }
   }
 }

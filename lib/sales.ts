@@ -4,8 +4,10 @@
   - 매출 조회 (기간별 합계, 구분별·수단별 집계, 목록)
 */
 
+import { omitKeys } from "./objectUtil";
 import type { CountTier } from "./selectableCount";
 import { supabase } from "./supabaseClient";
+import { one } from "./embed";
 
 export const SALE_TYPE_LABEL: Record<string, string> = {
   new: "신규결제",
@@ -256,7 +258,7 @@ async function grantProductToMemberLegacy(input: GrantInput): Promise<void> {
   let { data: mem, error: memErr } = await supabase.from("memberships").insert(membershipRow).select("id").single();
   if (memErr?.code === "42703") {
     // 2026-10-01(Batch C) — add_weekday_time_fixed_memberships.sql / selected_size 미실행 환경 방어.
-    const { bound_day_of_week, bound_start_time, selected_size, ...withoutWeekday } = membershipRow;
+    const withoutWeekday = omitKeys(membershipRow, ["bound_day_of_week", "bound_start_time", "selected_size"]);
     ({ data: mem, error: memErr } = await supabase.from("memberships").insert(withoutWeekday).select("id").single());
   }
   if (memErr || !mem) throw new Error("수강권 발급에 실패했어요: " + (memErr?.message ?? "no data"));
@@ -357,7 +359,7 @@ export async function fetchPayments(
   if (!page || page.length < PAGE_SIZE) break;
   }
 
-  return data.map((r: any) => ({
+  return data.map((r) => ({
     id: r.id,
     profileName: r.profiles?.name ?? "(회원)",
     saleType: r.sale_type,
@@ -404,9 +406,9 @@ export async function fetchCenterMembersForPayment(
     .select("profile_id, profiles(name)")
     .eq("center_id", centerId);
   if (error) throw new Error("회원 목록을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((r: any) => ({
+  return (data ?? []).map((r) => ({
     profileId: r.profile_id,
-    name: r.profiles?.name ?? "(이름 없음)",
+    name: one<{ name: string }>(r.profiles)?.name ?? "(이름 없음)",
   }));
 }
 
@@ -420,9 +422,9 @@ export async function fetchCenterStaffForPayment(
     .eq("center_id", centerId)
     .eq("status", "active");
   if (error) throw new Error("강사 목록을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((r: any) => ({
+  return (data ?? []).map((r) => ({
     accountId: r.account_id,
-    name: r.accounts?.name ?? "(이름 없음)",
+    name: one<{ name: string }>(r.accounts)?.name ?? "(이름 없음)",
   }));
 }
 
@@ -472,7 +474,7 @@ export async function fetchExpenses(centerId: string, fromDate: string, toDate: 
     .lte("spent_at", toDate)
     .order("spent_at", { ascending: false });
   if (error) throw new Error("지출 내역을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((r: any) => ({
+  return (data ?? []).map((r) => ({
     id: r.id, category: r.category, amount: r.amount,
     spentAt: r.spent_at, memo: r.memo,
   }));
@@ -547,7 +549,7 @@ export async function fetchPoints(centerId: string): Promise<PointRow[]> {
 
   // 회원별로 누적 잔액을 계산하면서 각 거래 직후 잔액을 기록
   const running: Record<string, number> = {};
-  const asc: PointRow[] = rows.map((r: any) => {
+  const asc: PointRow[] = rows.map((r) => {
     const pid = r.profile_id;
     running[pid] = (running[pid] ?? 0) + r.amount;
     return {
@@ -604,16 +606,16 @@ export async function fetchGrantableProducts(centerId: string, kind: "pass" | "g
   if (error) throw new Error("상품을 불러오지 못했어요: " + error.message);
   // 선택형 상품의 회차별 가격표를 한 번에 조회(테이블이 없거나 실패하면 빈 가격표 — 선택형은 지급 횟수 후보가 없어 지급이 막힌다)
   const tiersByProduct: Record<string, CountTier[]> = {};
-  const selectableIds = (data ?? []).filter((p: any) => p.purchase_count_selectable).map((p: any) => p.id);
+  const selectableIds = (data ?? []).filter((p) => p.purchase_count_selectable).map((p) => p.id);
   if (selectableIds.length > 0) {
     const { data: tierRows, error: tierErr } = await supabase
       .from("product_count_prices").select("product_id, count, price").in("product_id", selectableIds);
     if (!tierErr) {
-      for (const t of tierRows ?? []) (tiersByProduct[(t as any).product_id] ??= []).push({ count: (t as any).count, price: (t as any).price });
+      for (const t of tierRows ?? []) (tiersByProduct[t.product_id] ??= []).push({ count: t.count, price: t.price });
       for (const id of Object.keys(tiersByProduct)) tiersByProduct[id].sort((a, b) => a.count - b.count);
     }
   }
-  return (data ?? []).map((p: any) => ({
+  return (data ?? []).map((p) => ({
     id: p.id, name: p.name, price: p.price, totalCount: p.total_count,
     kind: p.product_kind === "goods" ? "goods" : "pass",
     unlimited: p.unlimited ?? false,
@@ -649,7 +651,7 @@ export async function fetchSaleProducts(centerId: string): Promise<SaleProduct[]
     error = fallback.error;
   }
   if (error) throw new Error("상품을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((p: any) => ({
+  return (data ?? []).map((p) => ({
     id: p.id, name: p.name, price: p.price, totalCount: p.total_count,
     kind: p.product_kind === "goods" ? "goods" : "pass",
     unlimited: p.unlimited ?? false,

@@ -347,7 +347,7 @@ export async function fetchNotificationRules(centerId: string): Promise<Notifica
     .in("trigger_type", SUPPORTED_TRIGGER_TYPES as unknown as string[])
     .order("created_at", { ascending: false });
   if (error) throw new Error("자동 발송 규칙을 불러오지 못했어요: " + error.message);
-  return (data ?? []).map((r: any) => ({
+  return (data ?? []).map((r) => ({
     id: r.id, triggerType: r.trigger_type, daysBefore: r.days_before, thresholdCount: r.threshold_count,
     productId: r.product_id, sendAlimtalk: r.send_alimtalk, templateId: r.template_id, isActive: r.is_active,
   }));

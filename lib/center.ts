@@ -15,6 +15,7 @@ import { computeSelectableSchedule, type ScheduleRule, type SelectableSchedule }
 import type { CountTier } from "./selectableCount";
 
 import { todayKstYmd } from "./membershipExpiry";
+import { one } from "./embed";
 export type CenterDetail = {
   id: string;
   name: string;
@@ -96,23 +97,23 @@ export async function fetchCenterClasses(centerId: string): Promise<CenterClass[
 
   // 같은 이름의 수업은 가장 빠른 1개만 (센터 소개에서 종류별로 한눈에)
   const seen = new Set<string>();
-  rows = rows.filter((r: any) => {
+  rows = rows.filter((r) => {
     if (seen.has(r.title)) return false;
     seen.add(r.title);
     return true;
   }).slice(0, 20);
 
-  const ids = rows.map((r: any) => r.id);
+  const ids = rows.map((r) => r.id);
   const counts: Record<string, number> = {};
   if (ids.length > 0) {
     const { data: cnt } = await supabase
       .from("class_reservation_counts")
       .select("class_id, confirmed_count")
       .in("class_id", ids);
-    for (const c of cnt ?? []) counts[(c as any).class_id] = (c as any).confirmed_count;
+    for (const c of cnt ?? []) counts[c.class_id] = c.confirmed_count;
   }
 
-  return rows.map((r: any) => ({
+  return rows.map((r) => ({
     id: r.id,
     title: r.title,
     startText: KST_DT.format(new Date(r.start_time)),
@@ -368,7 +369,7 @@ async function fetchMemberCenterProducts(centerId: string): Promise<CenterProduc
   // 있으므로 배열로 명시한다.
   const rows = (data ?? []) as any[];
 
-  const limitedIds = rows.filter((p: any) => p.max_quantity != null).map((p: any) => p.id);
+  const limitedIds = rows.filter((p) => p.max_quantity != null).map((p) => p.id);
   let soldByProduct: Record<string, number> = {};
   if (limitedIds.length > 0) {
     const { data: counts, error: countErr } = await supabase
@@ -376,13 +377,13 @@ async function fetchMemberCenterProducts(centerId: string): Promise<CenterProduc
       .select("product_id, sold_count")
       .in("product_id", limitedIds);
     if (countErr) throw new Error("판매 개수를 불러오지 못했어요: " + countErr.message);
-    for (const c of counts ?? []) soldByProduct[(c as any).product_id] = (c as any).sold_count;
+    for (const c of counts ?? []) soldByProduct[c.product_id] = c.sold_count;
   }
 
   // 회차별 가격표(product_count_prices) — 선택형 상품 id들만 한 번에 조회. 테이블이 없거나 조회가 실패하면
   // 빈 가격표로 취급하고, 가격표가 없는 선택형 상품은 구매 불가이므로 아래에서 목록에서 제외한다
   // (1회분 가격으로 잘못 팔리는 일이 없게).
-  const selectableIds = rows.filter((p: any) => p.purchase_count_selectable).map((p: any) => p.id);
+  const selectableIds = rows.filter((p) => p.purchase_count_selectable).map((p) => p.id);
   const tiersByProduct: Record<string, CountTier[]> = {};
   if (selectableIds.length > 0) {
     const { data: tierRows, error: tierErr } = await supabase
@@ -398,7 +399,7 @@ async function fetchMemberCenterProducts(centerId: string): Promise<CenterProduc
   return rows
     .filter((p: any) => !p.purchase_count_selectable || (tiersByProduct[p.id]?.length ?? 0) > 0)
     .filter((p) => !isFixedExpiryPassed(periodSourceFromRow(p)))   // 고정 만료일이 지난 상품은 구매 목록에서 제외(서버 fetch_purchasable_products 와 같은 규칙, 방어선)
-    .map((p: any) => {
+    .map((p) => {
       const tiers = tiersByProduct[p.id] ?? [];
       return {
         id: p.id, name: p.name, price: p.price,
@@ -434,7 +435,7 @@ export async function fetchPurchaseScheduleOptions(productId: string): Promise<S
     .select("day_of_week, start_time")
     .eq("product_id", productId);
   if (error) throw new Error("선택 가능한 요일/시간을 불러오지 못했어요: " + error.message);
-  const rules: ScheduleRule[] = (data ?? []).map((r: any) => ({
+  const rules: ScheduleRule[] = (data ?? []).map((r) => ({
     id: "", dayOfWeek: r.day_of_week, startTime: r.start_time ? String(r.start_time).slice(0, 5) : null, classTitle: null,
   }));
   return computeSelectableSchedule(rules);
@@ -445,7 +446,7 @@ export async function hasActivePassAtCenter(centerId: string): Promise<boolean> 
   const accountId = await getMyAccountId();
   if (!accountId) return false;
   const { data: profs } = await supabase.from("profiles").select("id").eq("account_id", accountId).is("deleted_at", null);
-  const ids = (profs ?? []).map((p: any) => p.id);
+  const ids = (profs ?? []).map((p) => p.id);
   if (ids.length === 0) return false;
 
   const { data } = await supabase
@@ -455,8 +456,8 @@ export async function hasActivePassAtCenter(centerId: string): Promise<boolean> 
     .eq("center_id", centerId)
     .eq("status", "active");
   const today = todayKstYmd();
-  return (data ?? []).some((m: any) =>
-    m.products?.product_kind !== "goods" &&
+  return (data ?? []).some((m) =>
+    one<{ product_kind: string }>(m.products)?.product_kind !== "goods" &&
     (m.remaining_count == null || m.remaining_count > 0) &&
     (!m.expires_at || m.expires_at >= today)
   );

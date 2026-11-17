@@ -4,6 +4,7 @@
   - cart_items 테이블 사용 (회원 본인 것만)
 */
 
+import { omitKeys } from "./objectUtil";
 import { supabase } from "./supabaseClient";
 import { getMyAccountId } from "./authAccount";
 import type { CountTier } from "./selectableCount";
@@ -80,7 +81,7 @@ export async function addToCart(input: {
   let { error } = await supabase.from("cart_items").insert(row);
   if (error?.code === "42703" && input.selectedCount == null) {
     // add_selectable_count_pricing.sql 미적용 환경 — 고정 상품은 기존 방식 그대로 담는다.
-    const { selected_count, ...legacy } = row;
+    const legacy = omitKeys(row, ["selected_count"]);
     ({ error } = await supabase.from("cart_items").insert(legacy));
   } else if (error?.code === "42703") {
     throw new Error("횟수 선택 상품은 아직 장바구니에 담을 수 없어요. 바로 구매해주세요.");
@@ -110,7 +111,7 @@ export async function fetchCart(): Promise<CartItem[]> {
       for (const id of Object.keys(tiersByProduct)) tiersByProduct[id].sort((a, b) => a.count - b.count);
     }
   }
-  return rows.map((c: any) => ({
+  return rows.map((c) => ({
     id: c.id, centerId: c.center_id, productId: c.product_id,
     productName: c.product_name, price: c.price, selectedSize: c.selected_size,
     sizes: c.products?.sizes ?? null,
