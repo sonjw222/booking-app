@@ -1,6 +1,7 @@
 /*
   환불 완료 / 결제 전 주문 취소 관리자 알림(2026-10-02) — SQL 계약 + 클라이언트 경로. 실제 PostgreSQL 동작은 tests/sql/*.test.mjs(PGlite)가 검증한다.
 */
+import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -48,7 +49,6 @@ describe("push_notification 권한 감사(저장소 전체)", () => {
     expect(sql).not.toMatch(/revoke[^;]*service_role/i);
   });
   it("클라이언트/edge function에서 push_notification을 rpc로 직접 호출하는 코드가 없다", () => {
-    const { execSync } = require("node:child_process");
     const out = execSync(`grep -rnE "rpc\\([^)]*push_notification" app lib supabase --include='*.ts' --include='*.tsx' || true`, { cwd: join(__dirname, "../.."), encoding: "utf-8" });
     expect(out.trim()).toBe("");
   });
