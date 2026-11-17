@@ -19,13 +19,14 @@ vi.mock("../../lib/supabaseClient", () => ({
   supabase: {
     from: (table: string) => {
       const rec = { table, op: "", payload: undefined as unknown, filters: {} as Record<string, unknown> };
-      const chain: any = {
+      interface Chain { update(p: unknown): Chain; select(): Chain; eq(k: string, v: unknown): Chain; in(k: string, v: unknown): Chain; order(col: string): Chain; then(res: (v: unknown) => unknown): Promise<unknown> }
+      const chain: Chain = {
         update(p: unknown) { rec.op = "update"; rec.payload = p; return chain; },
         select() { if (table === "class_trainers") return chain; return chain; },
         eq(k: string, v: unknown) { rec.filters[k] = v; return chain; },
         in(k: string, v: unknown) { rec.filters[k] = v; return chain; },
         order(col: string) { trainerCalls.push(col); return chain; },
-        then(res: any) { calls.push(rec); return Promise.resolve(table === "class_trainers" ? (trainerQueue.shift() ?? trainerResult) : updateResult).then(res); },
+        then(res) { calls.push(rec); return Promise.resolve(table === "class_trainers" ? (trainerQueue.shift() ?? trainerResult) : updateResult).then(res); },
       };
       return chain;
     },
