@@ -114,7 +114,8 @@ describe("robots / sitemap / 메타데이터", () => {
   });
   it("robots 매칭(RFC 9309 최장 일치): /reservation 및 하위·쿼리는 차단, /reservation-guide 등 무관한 경로와 공개 경로는 허용", async () => {
     const { default: robots } = await import("../../app/robots");
-    const rule = (Array.isArray(robots().rules) ? robots().rules[0] : robots().rules) as { allow?: string; disallow?: string[] };
+    const rules = robots().rules;
+    const rule = (Array.isArray(rules) ? rules[0] : rules) as { allow?: string; disallow?: string[] };
     // `$`로 끝나는 패턴은 정확히 일치, 아니면 접두사 일치. 더 긴 패턴이 이기고 길이가 같으면 allow가 이긴다.
     const matches = (pat: string, path: string) => (pat.endsWith("$") ? path === pat.slice(0, -1) : path.startsWith(pat));
     const blocked = (path: string) => {

@@ -172,7 +172,7 @@ describe("Bucket 2 RLS 실제 서버 거부/허용 — products/rooms", () => {
 
     await switchToTestUser(MANAGER_B.email, MANAGER_B.password);
     await expect(
-      addRoom(centerAId, { name: QA_ROOM_NAME, memo: "", address: "", latitude: null, longitude: null })
+      addRoom(centerAId, { name: QA_ROOM_NAME, memo: "", address: "", detailAddress: "", latitude: null, longitude: null })
     ).rejects.toThrow();
   });
 
@@ -181,7 +181,7 @@ describe("Bucket 2 RLS 실제 서버 거부/허용 — products/rooms", () => {
     await saveRolePermissions(roleId, ["facility.room"]);
 
     await switchToTestUser(MANAGER_B.email, MANAGER_B.password);
-    await addRoom(centerAId, { name: QA_ROOM_NAME, memo: "", address: "", latitude: null, longitude: null });
+    await addRoom(centerAId, { name: QA_ROOM_NAME, memo: "", address: "", detailAddress: "", latitude: null, longitude: null });
     const { data } = await supabase
       .from("rooms").select("id")
       .eq("center_id", centerAId).eq("name", QA_ROOM_NAME)
