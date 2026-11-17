@@ -2,7 +2,7 @@
 // 실행: PGLITE_MODULE=<pglite 디렉터리> node --test tests/sql/kst-dates-live-audit.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 const { PGlite } = await import(process.env.PGLITE_MODULE ? pathToFileURL(process.env.PGLITE_MODULE + '/dist/index.js').href : '@electric-sql/pglite');
 const root = new URL('../../', import.meta.url);

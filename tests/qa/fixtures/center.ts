@@ -34,10 +34,10 @@ export async function ensureQaCenter(admin: SupabaseClient, managerAccountId: st
     centerId = found.data[0].id as string;
     // 안전 확인: 이 센터의 활성 오너가 QA 매니저인지(아니면 실제 센터와 이름이 겹친 것일 수 있으니 건드리지 않는다)
     const owners = await admin
-      .from("manager_centers").select("account_id, center_roles(is_owner)").eq("center_id", centerId).eq("status", "active")
-      .overrideTypes<{ account_id: string; center_roles: { is_owner: boolean } | null }[], { merge: false }>();
+      .from("manager_centers").select("account_id, center_roles(is_owner)").eq("center_id", centerId).eq("status", "active");
     if (owners.error) throw new Error(`QA 센터 관리자 조회 실패 — ${describe("manager_centers", owners.error)}`);
-    const ownerIds = (owners.data ?? []).filter((r) => r.center_roles?.is_owner).map((r) => r.account_id as string);
+    const ownerRows = (owners.data ?? []) as unknown as { account_id: string; center_roles: { is_owner: boolean } | null }[];
+    const ownerIds = ownerRows.filter((r) => r.center_roles?.is_owner).map((r) => r.account_id as string);
     if (ownerIds.length > 0 && !ownerIds.includes(managerAccountId)) {
       throw new Error("이름이 같은 센터의 오너가 QA 매니저가 아닙니다. 실제 센터일 수 있어 QA를 중단합니다(수정하지 않음).");
     }

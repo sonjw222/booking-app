@@ -1,7 +1,7 @@
 import { ctxFor, BASE, UX, browser, OUT, settle, psql, check, save } from "./lib.mjs";
 const cls = psql(`select id||'|'||title||'|'||pass_selection_mode from classes where center_id='${UX}' order by start_time`).split("\n").map((l) => l.split("|"));
-const [A, B, ALL, SEL] = cls.map((c) => c[0]);
-const { ctx, page: p } = await ctxFor();
+const [A, B] = cls.map((c) => c[0]);
+const { page: p } = await ctxFor();
 const body = async () => (await p.locator("body").innerText()).replace(/\n+/g, " | ");
 // 센터 수업 탭
 await p.goto(`${BASE}/center/${UX}`, { waitUntil: "domcontentloaded" }); await settle(p, 3500);

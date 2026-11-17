@@ -34,7 +34,7 @@ async function row(id: string): Promise<MembershipExpiryRow> {
   if (error) throw new Error(`수강권 조회 실패: ${error.message}`);
   return data as MembershipExpiryRow;
 }
-const withoutExpiry = (r: MembershipExpiryRow) => { const { expires_at, ...rest } = r; return rest; };
+const withoutExpiry = (r: MembershipExpiryRow) => { const rest: Partial<MembershipExpiryRow> = { ...r }; delete rest.expires_at; return rest; };
 
 async function asOwner() { await switchToTestUser("TEST_MANAGER_A_EMAIL", "TEST_MANAGER_A_PASSWORD"); }
 
