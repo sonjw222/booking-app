@@ -8,7 +8,9 @@ describe("/products 구매 전 안내", () => {
   it("환불·취소 정책과 사업자 정보로 연결된다", () => {
     expect(page).toContain('data-testid="products-purchase-guide"');
     expect(page).toMatch(/href="\/legal\/refund"[\s\S]{0,200}환불·취소 정책/);
-    expect(page).toMatch(/href="\/legal\/business"[\s\S]{0,200}사업자 정보/);
+    expect(page).toMatch(/href="\/legal\/business"[\s\S]{0,200}모하빗 운영 사업자 정보/);
+    expect(page).toContain("실제 수업·상품을 제공하는 입점 센터 정보");
+    expect(page).toContain("<strong>센터에서 보기</strong>");
   });
   it("PG사명 단정·결제창 흉내가 없고, 사업장 소재지는 단일 출처(BUSINESS_INFO.address)로만 노출한다(2026-10-27 NICEPAY 심사 요청 — 공개 배포는 사용자 승인 후)", () => {
     const ui = page.replace(/\/\*[\s\S]*?\*\//g, "");
