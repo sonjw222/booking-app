@@ -18,6 +18,7 @@ import {
   copyByDate, type CopyDateItem,
 } from "../../lib/classes";
 import { fetchMonthData } from "../../lib/reservations";
+import { kstMidMonthFuture, kstYearMonth } from "../helpers/kstMonth";
 import {
   switchToTestUser,
   signOutTestSession,
@@ -112,7 +113,7 @@ describe("class_trainers: 담당 강사 복수 지정(lib/classes.ts)", () => {
 
 describe("fetchMonthData()의 instructorNames — 회원 화면에 담당 강사 이름 노출", () => {
   it("담당 강사가 지정된 수업은 instructorNames에 이름이 채워진다", async () => {
-    const cls = await createFutureTestClass(centerAId, { title: "강사노출-확인", hoursFromNow: 905 });
+    const cls = await createFutureTestClass(centerAId, { title: "강사노출-확인", startAt: kstMidMonthFuture() });
     cleanupClassIds.push(cls.id);
     await setClassTrainers(cls.id, [managerA.accountId]);
 
@@ -121,20 +122,22 @@ describe("fetchMonthData()의 instructorNames — 회원 화면에 담당 강사
     expect(expectedName).toBeTruthy();
 
     await asMemberA();
-    const start = new Date(cls.startTime);
-    const monthData = await fetchMonthData(start.getFullYear(), start.getMonth() + 1, memberA.accountId);
+    // 수업 생성(kstMidMonthFuture)과 조회 대상 월(kstYearMonth)을 같은 Asia/Seoul 기준으로 계산한다 — 러너 시간대(UTC)·실행 날짜와 무관.
+    const { year, month } = kstYearMonth(new Date(cls.startTime));
+    const monthData = await fetchMonthData(year, month, memberA.accountId);
     const found = monthData.classes.find((c) => c.id === cls.id);
     expect(found).toBeDefined();
     expect(found!.instructorNames).toContain(expectedName);
   });
 
   it("담당 강사가 없는 수업은 instructorNames가 빈 배열이다", async () => {
-    const cls = await createFutureTestClass(centerAId, { title: "강사노출-미지정", hoursFromNow: 906 });
+    const cls = await createFutureTestClass(centerAId, { title: "강사노출-미지정", startAt: kstMidMonthFuture() });
     cleanupClassIds.push(cls.id);
 
     await asMemberA();
-    const start = new Date(cls.startTime);
-    const monthData = await fetchMonthData(start.getFullYear(), start.getMonth() + 1, memberA.accountId);
+    // 수업 생성(kstMidMonthFuture)과 조회 대상 월(kstYearMonth)을 같은 Asia/Seoul 기준으로 계산한다 — 러너 시간대(UTC)·실행 날짜와 무관.
+    const { year, month } = kstYearMonth(new Date(cls.startTime));
+    const monthData = await fetchMonthData(year, month, memberA.accountId);
     const found = monthData.classes.find((c) => c.id === cls.id);
     expect(found).toBeDefined();
     expect(found!.instructorNames).toEqual([]);

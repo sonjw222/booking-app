@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-11-24 — Integration 테스트 UTC/KST 월 경계 시한성 실패 수정 (Issue #277, 테스트만 변경, 앱 코드·SQL 없음)
+- `class-trainers-and-pass-selection-mode.test.ts` 의 `instructorNames` 2건이 "now+905h 수업 + 러너(UTC) `getMonth()`" 때문에 UTC 월말·KST 다음 달 초 실행 시각에 실패하던 문제 수정: 수업을 KST 기준 다음 달 15일 12:00(`tests/helpers/kstMonth.ts kstMidMonthFuture`)에 만들고 조회 월도 같은 KST 기준(`kstYearMonth`)으로 계산. `createFutureTestClass` 에 `startAt` 옵션 추가. 결정적 검증 `tests/unit/integrationKstMonthBoundary.test.ts`(22건, 2026~2029 매시간 전수 포함).
+
 ## 2026-11-17 — TypeScript·ESLint 기술 부채 정리 (PR #267~#272, 운영 동작 변경 없음)
 - TypeScript: `tsc --noEmit` 63건(전부 `tests/`) → **0건**(PR #268, 테스트 13개 파일만 변경; `@ts-ignore`/`any`/제외/삭제/strict 완화 없음).
 - ESLint: 에러 **1,481 → 163**, 경고 **196 → 28**(PR #269 tests/unit·#270 tests/integration 외·#271 lib/scripts/supabase·#272 app). 규칙 비활성화·eslint-disable·설정 축소 없음, baseline 은 `scripts/lint/updateBaseline.mjs`(PR #267)로 재생성(증가 0). `no-explicit-any` 1,282 → 26.

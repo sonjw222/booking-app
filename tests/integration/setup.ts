@@ -530,7 +530,7 @@ export async function getOrCreateOwnedTestCenter(manager: TestUser): Promise<str
 export async function createFutureTestClass(
   centerId: string,
   opts?: {
-    capacity?: number; hoursFromNow?: number; title?: string; classFormat?: "group" | "private"; durationMinutes?: number;
+    capacity?: number; hoursFromNow?: number; startAt?: Date; title?: string; classFormat?: "group" | "private"; durationMinutes?: number;
     // add_class_trainers_pass_selection_mode_draft_proposed.sql이 아직 적용되지 않은 환경에서도
     // 이 함수를 쓰는 기존 테스트 전부가 깨지지 않도록, 값을 명시적으로 넘길 때만 insert payload에
     // pass_selection_mode 키를 포함한다(컬럼이 없는 DB에서는 아예 이 키를 보내지 않음).
@@ -538,7 +538,8 @@ export async function createFutureTestClass(
   }
 ): Promise<{ id: string; startTime: string; endTime: string }> {
   const hours = opts?.hoursFromNow ?? 48;
-  const start = new Date(Date.now() + hours * 3600 * 1000);
+  // startAt 이 있으면 그 시각(월 경계 같은 날짜 의미가 필요한 테스트용 — tests/helpers/kstMonth.ts), 없으면 기존처럼 지금 + hoursFromNow.
+  const start = opts?.startAt ?? new Date(Date.now() + hours * 3600 * 1000);
   const end = new Date(start.getTime() + (opts?.durationMinutes ?? 60) * 60 * 1000);
   const row: Record<string, unknown> = {
     center_id: centerId,
