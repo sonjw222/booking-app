@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-11-24 — Integration 테스트 fixture 순서 의존 제거 (Issue #279, 테스트만 변경, 앱 코드·SQL 없음)
+- `class-trainers-and-pass-selection-mode.test.ts` 의 `instructorNames` describe 가 회원 A 의 `center_members`(내부 QA 센터 RLS 조건)와 활성 `memberships`(`fetchMonthData` 조건)를 스스로 만들고(이미 있으면 재사용), 새로 만든 행만 `afterAll` 에서 정리하도록 수정. 파일 단독 실행·순서 셔플·전체 실행 모두 통과. #277 의 KST 월 경계 수정은 유지.
+
 ## 2026-11-24 — Integration 테스트 UTC/KST 월 경계 시한성 실패 수정 (Issue #277, 테스트만 변경, 앱 코드·SQL 없음)
 - `class-trainers-and-pass-selection-mode.test.ts` 의 `instructorNames` 2건이 "now+905h 수업 + 러너(UTC) `getMonth()`" 때문에 UTC 월말·KST 다음 달 초 실행 시각에 실패하던 문제 수정: 수업을 KST 기준 다음 달 15일 12:00(`tests/helpers/kstMonth.ts kstMidMonthFuture`)에 만들고 조회 월도 같은 KST 기준(`kstYearMonth`)으로 계산. `createFutureTestClass` 에 `startAt` 옵션 추가. 결정적 검증 `tests/unit/integrationKstMonthBoundary.test.ts`(22건, 2026~2029 매시간 전수 포함).
 
