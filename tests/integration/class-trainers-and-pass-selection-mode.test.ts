@@ -25,6 +25,7 @@ import {
   type TestUser,
   getOrCreateOwnedTestCenter,
   createFutureTestClass,
+  createTestMembership,
   getFixtureAdminClient,
 } from "./setup";
 
@@ -112,6 +113,43 @@ describe("class_trainers: 담당 강사 복수 지정(lib/classes.ts)", () => {
 });
 
 describe("fetchMonthData()의 instructorNames — 회원 화면에 담당 강사 이름 노출", () => {
+  // 사전 조건을 이 describe 가 스스로 만든다(Issue #279) — 다른 테스트 파일이 먼저 만들어 둔 상태에 기대지 않는다.
+  //  - 테스트 센터("통합테스트센터-*")는 승인 + 내부 QA 센터라 classes RLS("승인된 센터 수업 조회")가 회원에게 수업을 보이려면
+  //    그 회원 프로필이 center_members 여야 한다.
+  //  - fetchMonthData() 는 회원이 "활성 수강권을 보유한 센터"의 수업만 조회한다 → 활성 memberships 필요.
+  // 이미 있던 행은 건드리지 않고(다른 파일이 공유), 이 describe 가 새로 만든 행만 afterAll 에서 지운다. 모두 격리 테스트 DB(fixture admin) 경로.
+  const created: { centerMemberId?: string; membershipId?: string } = {};
+
+  beforeAll(async () => {
+    const admin = getFixtureAdminClient();
+    const { data: profile, error: pErr } = await admin
+      .from("profiles").select("id").eq("account_id", memberA.accountId).eq("is_primary", true).is("deleted_at", null).maybeSingle();
+    if (pErr || !profile) throw new Error(`회원 A 대표 프로필 조회 실패: ${pErr?.message ?? "없음"}`);
+
+    const { data: cm, error: cmErr } = await admin
+      .from("center_members").select("id").eq("center_id", centerAId).eq("profile_id", profile.id).maybeSingle();
+    if (cmErr) throw new Error(`center_members 조회 실패: ${cmErr.message}`);
+    if (!cm) {
+      const { data: ins, error: insErr } = await admin
+        .from("center_members").insert({ center_id: centerAId, profile_id: profile.id }).select("id").single();
+      if (insErr || !ins) throw new Error(`center_members 생성 실패: ${insErr?.message ?? "no data"}`);
+      created.centerMemberId = ins.id;
+    }
+
+    const { data: existingMs, error: msErr } = await admin
+      .from("memberships").select("id").eq("center_id", centerAId).eq("profile_id", profile.id).is("product_id", null).eq("product_name", "통합테스트 수강권").limit(1);
+    if (msErr) throw new Error(`memberships 조회 실패: ${msErr.message}`);
+    await asManagerA();   // memberships INSERT 는 매니저 권한(회원 본인은 RLS 로 거부) — 다른 integration 테스트와 같은 방식
+    const ms = await createTestMembership(centerAId, profile.id);
+    if (!existingMs || existingMs.length === 0) created.membershipId = ms.id;
+  }, 30000);
+
+  afterAll(async () => {
+    const admin = getFixtureAdminClient();
+    if (created.membershipId) await admin.from("memberships").delete().eq("id", created.membershipId);
+    if (created.centerMemberId) await admin.from("center_members").delete().eq("id", created.centerMemberId);
+  }, 30000);
+
   it("담당 강사가 지정된 수업은 instructorNames에 이름이 채워진다", async () => {
     const cls = await createFutureTestClass(centerAId, { title: "강사노출-확인", startAt: kstMidMonthFuture() });
     cleanupClassIds.push(cls.id);
