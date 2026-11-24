@@ -19,10 +19,11 @@ import { fetchMyCenters, fetchTodayClasses, type ManagedCenter, type TodayClass 
 import { replaceTabNavigation } from "../../lib/navState";
 import { fetchClassAttendees, setAttendance, type ClassAttendee } from "../../lib/classes";
 import { fetchMemberDetail, type MemberDetailData } from "../../lib/members";
-import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../lib/roles";
+import { canSeeManagerMenu } from "../../lib/roles";
 import { fetchDashboardSummary, won, type DashboardSummary } from "../../lib/sales";
 import EmptyState from "../components/EmptyState";
 import ErrorState from "../components/ErrorState";
+import { useMyEffectivePerms } from "../components/useMyEffectivePerms";
 
 type DashPeriod = "today" | "7d" | "30d";
 
@@ -49,7 +50,6 @@ export default function ManagerDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // 메뉴 노출용 유효 권한 (오너는 전권이라 계산하지 않음 — null이면 "아직 로딩중")
-  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
   // 예약자 명단 / 회원 정보
   const [rosterClass, setRosterClass] = useState<TodayClass | null>(null);
   const [roster, setRoster] = useState<ClassAttendee[]>([]);
@@ -166,16 +166,7 @@ export default function ManagerDashboard() {
   const activeCenter = centers.find((c) => c.id === activeCenterId);
 
   // 활성 센터의 메뉴 노출용 권한 계산 (오너는 전권이라 건너뜀)
-  useEffect(() => {
-    if (!activeCenter) return;
-    if (activeCenter.isOwner) { setMyPerms(null); return; }
-    let cancelled = false;
-    setMyPerms(null);
-    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
-      .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
-    return () => { cancelled = true; };
-  }, [activeCenter]);
+  const myPerms = useMyEffectivePerms(activeCenter, setError);
 
   // 메뉴 노출 가능 여부: 오너면 전권, 아니면 계산된 유효 권한에 포함될 때만.
   function canSeeMenu(permissionKey: string): boolean {

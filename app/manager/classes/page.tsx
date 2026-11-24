@@ -41,7 +41,7 @@ import {
   isValidClassTimeRange, checkScheduleConflicts, type ScheduleConflict,
   createLatestGuard, countClassesByDay, classesOnDate,
 } from "../../../lib/classes";
-import { fetchStaff, fetchMyEffectivePermissionKeys, canSeeManagerMenu, type Staff } from "../../../lib/roles";
+import { fetchStaff, canSeeManagerMenu, type Staff } from "../../../lib/roles";
 import { fetchClassMemos, createClassMemo, updateClassMemo, deleteClassMemo, type ScheduleMemo } from "../../../lib/scheduleMemos";
 import { getMyAccountId } from "../../../lib/authAccount";
 import { addSlot, allSlots, countClasses, removeSlot, updateSlot, validateSlots, MAX_TIME_SLOTS, type TimeSlot } from "../../../lib/classTimeSlots";
@@ -54,6 +54,7 @@ import {
   type Product, type ScheduleRule,
 } from "../../../lib/passes";
 import { assignReservation, cancelAdminReservation, type AssignmentType } from "../../../lib/adminAssignment";
+import { useMyEffectivePerms } from "../../components/useMyEffectivePerms";
 import {
   ADMIN_REASON_CODES, ADMIN_REASON_LABELS, type AdminReasonCode,
   normalizeReasonDetail, adminBadges,
@@ -229,7 +230,6 @@ export default function ClassManagePage() {
   // 수정 시작 시점(서버에서 읽은 실제 값)의 예약 가능 수강권 설정 — "바뀌었는지"를 집합 비교로 판정해 그룹 전체 적용 여부를 정한다.
   const origPassRef = useRef<PassPolicy | null>(null);
   const [busy, setBusy] = useState(false);
-  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   useEffect(() => {
     if (!formOpen || !activeCenterId || !form.date || !form.start || !form.end) { setScheduleConflicts([]); return; }
@@ -355,16 +355,7 @@ export default function ClassManagePage() {
 
   const activeCenter = centers.find((c) => c.id === activeCenterId);
 
-  useEffect(() => {
-    if (!activeCenter) return;
-    if (activeCenter.isOwner) { setMyPerms(null); return; }
-    let cancelled = false;
-    setMyPerms(null);
-    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
-      .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
-    return () => { cancelled = true; };
-  }, [activeCenter]);
+  const myPerms = useMyEffectivePerms(activeCenter, setError);
 
   function canDo(key: string): boolean {
     return canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, key);

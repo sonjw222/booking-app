@@ -18,13 +18,14 @@ import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchProducts, createProduct, updateProduct, deleteProduct, deleteProducts, type Product } from "../../../lib/passes";
 import { bulkDeleteConfirmMessage, bulkDeleteToast, effectiveSelection, selectAllVisible, toggleSelected } from "../../../lib/bulkSelect";
 import BulkSelectBar from "../../components/BulkSelectBar";
-import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
+import { canSeeManagerMenu } from "../../../lib/roles";
 import ExpiryOptionField, { type ExpiryOptionValue } from "../../components/ExpiryOptionField";
 import { validateGoodsForm, goodsListLabel, nextUnlimitedForMode, draftsFromTiers, type GoodsPricingMode } from "../../../lib/goodsForm";
 import { draftsToTiers, type TierDraft } from "../../../lib/selectableCount";
 import { filterCatalog, catalogEmptyMessage, EMPTY_CATALOG_FILTER } from "../../../lib/catalogFilter";
 import CountPriceEditor from "../../components/CountPriceEditor";
 import CatalogSearchFilter from "../../components/CatalogSearchFilter";
+import { useMyEffectivePerms } from "../../components/useMyEffectivePerms";
 
 export default function GoodsPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
@@ -52,7 +53,6 @@ export default function GoodsPage() {
   const [editWasSelectable, setEditWasSelectable] = useState(false);
   // 상품 검색(이름/설명) — load() 후에도 유지되는 컴포넌트 state
   const [query, setQuery] = useState("");
-  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
   // 다중 선택 삭제 — 평상시에는 꺼져 있고 "선택"을 눌러야 체크 UI가 나타난다.
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -72,16 +72,7 @@ export default function GoodsPage() {
 
   const activeCenter = centers.find((c) => c.id === centerId);
 
-  useEffect(() => {
-    if (!activeCenter) return;
-    if (activeCenter.isOwner) { setMyPerms(null); return; }
-    let cancelled = false;
-    setMyPerms(null);
-    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
-      .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
-    return () => { cancelled = true; };
-  }, [activeCenter]);
+  const myPerms = useMyEffectivePerms(activeCenter, setError);
 
   function canDo(key: string): boolean {
     return canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, key);

@@ -26,9 +26,10 @@ import {
   type ExpenseRow, type PointRow,
 } from "../../../lib/sales";
 import { fetchSettings } from "../../../lib/settings";
-import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
+import { canSeeManagerMenu } from "../../../lib/roles";
 import { useCenterPermissionGate } from "../../../lib/permissionGate";
 import PermissionGateShell from "../../components/PermissionGateShell";
+import { useMyEffectivePerms } from "../../components/useMyEffectivePerms";
 
 const num = (s: string) => parseInt(s.replace(/[^0-9]/g, "") || "0", 10);
 
@@ -118,7 +119,6 @@ export default function SalesPage() {
   // 운영설정 "미수금 자동입력" — 켜져 있으면 상품가 - 입력된 결제수단 합계를 미수금에 자동 반영
   const [autoUnpaidInput, setAutoUnpaidInput] = useState(false);
   const [fUnpaidTouched, setFUnpaidTouched] = useState(false); // 사용자가 미수금을 직접 고쳤으면 자동계산 중단
-  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2400); }
 
@@ -192,16 +192,7 @@ export default function SalesPage() {
 
   const activeCenter = centers.find((c) => c.id === centerId);
 
-  useEffect(() => {
-    if (!activeCenter) return;
-    if (activeCenter.isOwner) { setMyPerms(null); return; }
-    let cancelled = false;
-    setMyPerms(null);
-    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
-      .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
-    return () => { cancelled = true; };
-  }, [activeCenter]);
+  const myPerms = useMyEffectivePerms(activeCenter, setError);
 
   function canDo(key: string): boolean {
     return canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, key);

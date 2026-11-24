@@ -14,8 +14,9 @@ import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchSettings, saveSettings, type CenterSettings } from "../../../lib/settings";
 import { toggleLimit, isValidLimit, MAX_LIMIT, type LimitKey } from "../../../lib/limitSettings";
-import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
+import { canSeeManagerMenu } from "../../../lib/roles";
 import { useUnsavedChanges, confirmDiscardChanges } from "../../../lib/useUnsavedChanges";
+import { useMyEffectivePerms } from "../../components/useMyEffectivePerms";
 
 const SLOT_UNITS: { value: string; label: string }[] = [
   { value: "hour", label: "정시" },
@@ -36,7 +37,6 @@ export default function SettingsPage() {
   useUnsavedChanges(dirty);   // 저장하지 않은 변경이 있으면 새로고침/링크 이동/센터 전환 전에 확인(2026-10-07)
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2400); }
 
@@ -53,16 +53,7 @@ export default function SettingsPage() {
 
   const activeCenter = centers.find((c) => c.id === centerId);
 
-  useEffect(() => {
-    if (!activeCenter) return;
-    if (activeCenter.isOwner) { setMyPerms(null); return; }
-    let cancelled = false;
-    setMyPerms(null);
-    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
-      .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
-    return () => { cancelled = true; };
-  }, [activeCenter]);
+  const myPerms = useMyEffectivePerms(activeCenter, setError);
 
   const canSave = canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, "facility.operation");
   // F20: 권한 확인이 끝나기 전에는 편집 불가로 취급한다(편집 가능했다가 잠기는 깜빡임 방지). 서버가 저장을 막는 것과 별개로 화면도 읽기 전용으로 일관되게 보인다.

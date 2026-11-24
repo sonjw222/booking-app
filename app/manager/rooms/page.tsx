@@ -16,7 +16,8 @@ import { fetchRooms, addRoom, updateRoom, deleteRoom, type Room } from "../../..
 import Loading from "../../components/Loading";
 import MapPicker from "../center-info/MapPicker";
 import MapPreview from "../../components/MapPreview";
-import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
+import { canSeeManagerMenu } from "../../../lib/roles";
+import { useMyEffectivePerms } from "../../components/useMyEffectivePerms";
 
 export default function RoomsPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
@@ -37,7 +38,6 @@ export default function RoomsPage() {
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
   const [mapPicker, setMapPicker] = useState(false);
-  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2000); }
 
@@ -54,16 +54,7 @@ export default function RoomsPage() {
 
   const activeCenter = centers.find((c) => c.id === centerId);
 
-  useEffect(() => {
-    if (!activeCenter) return;
-    if (activeCenter.isOwner) { setMyPerms(null); return; }
-    let cancelled = false;
-    setMyPerms(null);
-    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
-      .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
-    return () => { cancelled = true; };
-  }, [activeCenter]);
+  const myPerms = useMyEffectivePerms(activeCenter, setError);
 
   const canManageRooms = canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, "facility.room");
 

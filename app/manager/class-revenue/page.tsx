@@ -24,7 +24,8 @@ import {
   type ClassRevenueDaily, type ClassRevenueGroup,
 } from "../../../lib/classRevenue";
 import { fetchSettings } from "../../../lib/settings";
-import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
+import { canSeeManagerMenu } from "../../../lib/roles";
+import { useMyEffectivePerms } from "../../components/useMyEffectivePerms";
 
 function todayStr() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
@@ -67,7 +68,6 @@ export default function ClassRevenuePage() {
   const [editPaidTotal, setEditPaidTotal] = useState(0);
   const [editLoading, setEditLoading] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
-  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
   const [revenueModeFor, setRevenueModeFor] = useState<{ centerId: string; mode: UnlimitedRevenueMode } | null>(null);   // 센터 설정의 정기권 매출 표시 방식(없으면 기본 usage_split 문구)
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2400); }
@@ -85,16 +85,7 @@ export default function ClassRevenuePage() {
 
   const activeCenter = centers.find((c) => c.id === centerId);
 
-  useEffect(() => {
-    if (!activeCenter) return;
-    if (activeCenter.isOwner) { setMyPerms(null); return; }
-    let cancelled = false;
-    setMyPerms(null);
-    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
-      .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
-    return () => { cancelled = true; };
-  }, [activeCenter]);
+  const myPerms = useMyEffectivePerms(activeCenter, setError);
 
   useEffect(() => {
     if (!centerId) return;

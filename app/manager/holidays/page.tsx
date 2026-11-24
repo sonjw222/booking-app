@@ -15,7 +15,8 @@ import Loading from "../../components/Loading";
 import DatePicker from "../../components/DatePicker";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchHolidays, addHoliday, deleteHoliday, type Holiday } from "../../../lib/holidays";
-import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
+import { canSeeManagerMenu } from "../../../lib/roles";
+import { useMyEffectivePerms } from "../../components/useMyEffectivePerms";
 
 function todayStr() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
@@ -37,7 +38,6 @@ export default function HolidaysPage() {
   const [date, setDate] = useState(todayStr());
   const [confirmHoliday, setConfirmHoliday] = useState<{ classCount: number; reservationCount: number } | null>(null);
   const [reason, setReason] = useState("");
-  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2200); }
 
@@ -54,16 +54,7 @@ export default function HolidaysPage() {
 
   const activeCenter = centers.find((c) => c.id === centerId);
 
-  useEffect(() => {
-    if (!activeCenter) return;
-    if (activeCenter.isOwner) { setMyPerms(null); return; }
-    let cancelled = false;
-    setMyPerms(null);
-    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
-      .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
-    return () => { cancelled = true; };
-  }, [activeCenter]);
+  const myPerms = useMyEffectivePerms(activeCenter, setError);
 
   // add_holiday_safe/remove_holiday_safe RPC 둘 다 schedule.own.group.delete를 요구한다
   // (수업/그룹 삭제와 같은 키 재사용 — P0-6에서 지적된 것과 동일한 사안, 의도적으로 그대로 둠).

@@ -19,7 +19,8 @@ import {
 import { kstToday } from "../../../lib/servicePeriod";
 import SheetOverlay from "../../components/SheetOverlay";
 import Loading from "../../components/Loading";
-import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
+import { canSeeManagerMenu } from "../../../lib/roles";
+import { useMyEffectivePerms } from "../../components/useMyEffectivePerms";
 
 type OrderRow = Order & { memberName: string; memberPhone: string | null };
 
@@ -36,7 +37,6 @@ export default function ManagerOrdersPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
   // 만료 상품 기존 pending 주문 처리(add_expired_order_resolution_20261031.sql)
   const [expiryByProduct, setExpiryByProduct] = useState<Record<string, { expiryMode: string | null; expiryDate: string | null }>>({});
   const [resolutions, setResolutions] = useState<Record<string, ExpiredOrderResolution>>({});
@@ -66,16 +66,7 @@ export default function ManagerOrdersPage() {
 
   const activeCenter = centers.find((c) => c.id === centerId);
 
-  useEffect(() => {
-    if (!activeCenter) return;
-    if (activeCenter.isOwner) { setMyPerms(null); return; }
-    let cancelled = false;
-    setMyPerms(null);
-    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
-      .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
-    return () => { cancelled = true; };
-  }, [activeCenter]);
+  const myPerms = useMyEffectivePerms(activeCenter, setError);
 
   // fulfill_order() RPC가 실제로 요구하는 키는 카탈로그의 pass.order.fulfill이 아니라
   // pass.payment.create다(라이브 정의로 확인, SEC-116) — 결제 등록 권한과 같은 계층으로 취급.
