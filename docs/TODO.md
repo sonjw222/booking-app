@@ -1,5 +1,7 @@
 # TODO
 
+- **P3(회귀 QA 2026-11-17, 기존 결함)**: 로그인 상태에서 존재하지 않는 회원 경로(`/settings`, `/mypage/zzz` 등 404)를 열면 `React error #418`(하이드레이션 불일치) 발생 — 정리 직전 `58026928` 에서도 동일, 비로그인 404 는 정상. 원인 후보: 회원 레이아웃/nav 가 not-found 렌더와 SSR 값이 다름. 상세 `docs/qa/regression-20261117/REPORT.md`. 추적 Issue: #275. (#274 set-state-in-effect 88건과는 별개, 묶음 4 하이드레이션 이슈와 같이 볼 수 있음.)
+
 - **P2(ESLint 잔여 163 에러·28 경고, 상세 `docs/TS_ESLINT_CLEANUP_20261117.md`)**: `react-hooks/set-state-in-effect` 88(`useEffect(()=>{load()},[load])`·권한 초기화 패턴 — fetch 흐름 재설계 필요, 별도 Issue), `no-unescaped-entities` 24·`no-explicit-any` 26(소스 문자열을 단언하는 테스트 갱신과 함께: terms/privacy, subscription, calendar, MapPicker, login, lib 5곳, `Notification.data`), `no-html-link-for-pages` 11(`replaceTabNavigation`·back-header 연동 의도), `rules-of-hooks` 2(checkout `usePoints` 오탐 — 별칭 import + `orderPointLifecycle.test.ts:249` 갱신), `purity`/`preserve-manual-memoization` 각 1(my-reservations `Date.now()`), `refs` 1(notifications 오탐), `no-require-imports` 9(`scripts/qa/ui-polish/*.cjs` 의도적 CJS), 경고: `exhaustive-deps` 13·`no-img-element` 11·`jsx-a11y` 3·unused 1.
 - **P3**: lint baseline 이 줄었으므로 새 코드의 `any`·hooks 규칙 위반은 CI(`npm run lint`)가 막는다. 남은 baseline 은 위 항목을 처리할 때마다 `node scripts/lint/updateBaseline.mjs` 로 갱신.
 
