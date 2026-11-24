@@ -1,0 +1,18 @@
+FAIL S-member member 주요 화면 20개: 5xx·오류 경계·pageerror 없음 — /settings: status=404 boundary=false err=Minified React error #418; visit https://react.dev/errors/418?args[]=HTML&args[]= for the full message or use the non-mi
+PASS S-manager manager 주요 화면 24개: 5xx·오류 경계·pageerror 없음 — 24/24
+PASS S-anon 비로그인 공개 화면: 5xx 없음
+PASS L1 로그인 로고 링크 → 홈 이동(소프트 내비게이션: 문서 재로드 없음) — a[href=/]=1 url=https://mwhabit.com/
+PASS L2 결제 화면(없는 상품) '홈으로' → 홈(소프트 내비게이션), 오류 화면 문구 표시 — https://mwhabit.com/
+PASS E1 잘못된 비밀번호 → 오류 문구 표시(빈 문구·'undefined' 아님), 로그인 화면 유지 — 모하빗 MOVE · BOOK · ENJOY 오늘의 움직임을 가볍게 시작하세요. 필라테스부터 피겨스케이팅까지 내 주변 수업을 한곳에서 만나보세요. 로그인 회원가입 다시 만나서 반가워요 가입한 이메일로 로그인하세요. 이메일로 로그인 로그인 상태 유지 비밀번호를 잊으셨나요? 이메일 또는 비밀
+PASS E2 매니저 회원 화면: 조회 실패(500) 시 오류 문구 표시·화면 크래시 없음 — 회원 관리 홈 등급 전체 이름 주소 등급 전체 상태 전체 이용중 만료 휴면 수강권을 구매한 사람만 회원으로 표시돼요. 횟수 소진·기간 만료는 '만료', 휴면 처리 시 기간권 시간이 정지돼요. 전체 2명 예약자 동기화 CI User B 수강권 없음 전화번호 없음 › CI User A 수강
+PASS M1 회원 검색어 입력 → 목록이 즉시 좁혀지고(User B만), 지우면 복원(filtersRef 최신값 반영) — before=2 filtered=1 onlyB=true restored=2
+PASS M2 새로고침 후 로드 완료 → 목록 정상(조회 도중 바뀐 필터 적용 경로) — rows=2
+PASS W1 알림 행 왼쪽 스와이프 → 삭제 액션이 열림(중간 정지 없이 스냅) — x=-88 state=idle
+PASS W2 다른 행을 열면 이전 행은 닫힘(열린 행 id 공유 — cfg ref 최신값) — row0=0 row1=-88
+PASS W3 열린 행을 반대로 밀면 닫힘 — row1=0
+PASS W4 스와이프만으로는 삭제·고정이 실행되지 않음(알림 2건 유지)
+PASS N1 태블릿 폭 매니저 nav: 오른쪽 스와이프로 펼침, 왼쪽 스와이프로 접힘 — init=false afterRight=true afterLeft=false
+PASS N2 펼친 상태에서 메뉴 이동 → 경로 변경 후 compact 복귀 — expanded=true path=/manager/classes after=false
+FAIL X-pageerror 전 과정 pageerror(미처리 예외) 0건 — member:Minified React error #418; visit https://react.dev/errors/418?args[]=HTML&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+PASS X-external 외부 호스트 요청은 모두 차단(허용 외 접속 없음) — 없음
+PASS X-orders 회귀 QA 중 격리 DB 주문·결제 신규 생성 없음 — 0/0
