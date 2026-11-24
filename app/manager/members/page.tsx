@@ -21,7 +21,7 @@ import {
   membersToCsv, fetchMemberDetail, addMemberToCenter, sendAlimtalkToMembers, extendMembershipExpiry,
   type CenterMember, type Grade, type MemberDetailData,
 } from "../../../lib/members";
-import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
+import { canSeeManagerMenu } from "../../../lib/roles";
 import { getMyAccountId } from "../../../lib/authAccount";
 import {
   fetchMemberMemos, createMemberMemo, updateMemberMemoEntry, deleteMemberMemoEntry, type MemberMemo,
@@ -36,6 +36,7 @@ import {
 } from "../../../lib/membershipExpiry";
 import { fetchPurchaseScheduleOptions } from "../../../lib/center";
 import { DAYS, type SelectableSchedule } from "../../../lib/passes";
+import { useMyEffectivePerms } from "../../components/useMyEffectivePerms";
 import AlimtalkComposer, {
   emptyAlimtalkBlocks, flattenAlimtalkBlocks, hasAlimtalkContent, type AlimtalkBlock,
 } from "../../components/AlimtalkComposer";
@@ -132,7 +133,6 @@ function MembersContent() {
   const [newGradeColor, setNewGradeColor] = useState(GRADE_COLORS[0]);
   const [csvSheet, setCsvSheet] = useState(false);
   const [csvCols, setCsvCols] = useState<string[]>(["name", "grade", "phone", "passName", "remainingCount", "expiresAt"]);
-  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
   // 알림톡 발송 — 목록에서 여러 명 선택하거나(선택 모드), 상세 시트에서 한 명만
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -331,16 +331,7 @@ function MembersContent() {
 
   const activeCenter = centers.find((c) => c.id === centerId);
 
-  useEffect(() => {
-    if (!activeCenter) return;
-    if (activeCenter.isOwner) { setMyPerms(null); return; }
-    let cancelled = false;
-    setMyPerms(null);
-    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
-      .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
-    return () => { cancelled = true; };
-  }, [activeCenter]);
+  const myPerms = useMyEffectivePerms(activeCenter, setError);
 
   function canDo(key: string): boolean {
     return canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, key);

@@ -19,7 +19,8 @@ import {
 import {
   buildTree, canAddSkill, canAddSubCategory, countDescendants, flattenTree, indentLevel, MAX_PROGRESS_DEPTH, type TreeNode,
 } from "../../../lib/progressTree";
-import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
+import { canSeeManagerMenu } from "../../../lib/roles";
+import { useMyEffectivePerms } from "../../components/useMyEffectivePerms";
 
 export default function ProgressCategoryPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
@@ -35,7 +36,6 @@ export default function ProgressCategoryPage() {
   const [subInput, setSubInput] = useState<Record<string, string>>({});     // 분류 id → 하위 분류 이름 입력값
   const [skillInput, setSkillInput] = useState<Record<string, string>>({});   // 분류 id → 기술 이름 입력값
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});     // 접기/펼치기(accordion) — 입력값(subInput)은 접어도 유지된다
-  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2200); }
 
@@ -52,16 +52,7 @@ export default function ProgressCategoryPage() {
 
   const activeCenter = centers.find((c) => c.id === centerId);
 
-  useEffect(() => {
-    if (!activeCenter) return;
-    if (activeCenter.isOwner) { setMyPerms(null); return; }
-    let cancelled = false;
-    setMyPerms(null);
-    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
-      .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
-    return () => { cancelled = true; };
-  }, [activeCenter]);
+  const myPerms = useMyEffectivePerms(activeCenter, setError);
 
   // 이 화면의 CRUD 전체가 customer.progress 단일 키로 묶여있다(세분화된 키 없음).
   const canManageProgress = canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, "customer.progress");

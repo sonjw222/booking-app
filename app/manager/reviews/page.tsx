@@ -21,7 +21,8 @@ import Loading from "../../components/Loading";
 import RichTextEditor from "../../components/RichTextEditor";
 import { extractPlainText } from "../../../lib/security";
 import { ZoomableImage } from "../../components/ImageViewer";
-import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
+import { canSeeManagerMenu } from "../../../lib/roles";
+import { useMyEffectivePerms } from "../../components/useMyEffectivePerms";
 
 export default function ManagerReviewsPage() {
   const [centers, setCenters] = useState<ManagedCenter[]>([]);
@@ -39,7 +40,6 @@ export default function ManagerReviewsPage() {
   const [replyText, setReplyText] = useState("");
   const [replyAlign, setReplyAlign] = useState<"left" | "center" | "right">("left");
   const [replyFontSize, setReplyFontSize] = useState(15);
-  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2200); }
 
@@ -56,16 +56,7 @@ export default function ManagerReviewsPage() {
 
   const activeCenter = centers.find((c) => c.id === centerId);
 
-  useEffect(() => {
-    if (!activeCenter) return;
-    if (activeCenter.isOwner) { setMyPerms(null); return; }
-    let cancelled = false;
-    setMyPerms(null);
-    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
-      .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
-    return () => { cancelled = true; };
-  }, [activeCenter]);
+  const myPerms = useMyEffectivePerms(activeCenter, setError);
 
   function canDo(key: string): boolean {
     return canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, key);

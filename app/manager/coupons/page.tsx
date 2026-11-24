@@ -21,9 +21,10 @@ import SheetOverlay from "../../components/SheetOverlay";
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
-import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
+import { canSeeManagerMenu } from "../../../lib/roles";
 import { fetchProducts, won, type Product } from "../../../lib/passes";
 import { fetchMembers, type CenterMember } from "../../../lib/members";
+import { useMyEffectivePerms } from "../../components/useMyEffectivePerms";
 import {
   fetchCoupons, createCoupon, archiveCoupon,
   issueCouponToMembers, revokeMemberCoupon, fetchIssuedMemberCoupons,
@@ -39,7 +40,6 @@ export default function CouponsPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   // 생성 시트
   const [sheet, setSheet] = useState(false);
@@ -80,16 +80,7 @@ export default function CouponsPage() {
 
   const activeCenter = centers.find((c) => c.id === centerId);
 
-  useEffect(() => {
-    if (!activeCenter) return;
-    if (activeCenter.isOwner) { setMyPerms(null); return; }
-    let cancelled = false;
-    setMyPerms(null);
-    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
-      .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
-    return () => { cancelled = true; };
-  }, [activeCenter]);
+  const myPerms = useMyEffectivePerms(activeCenter, setError);
 
   function canDo(key: string): boolean {
     return canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, key);

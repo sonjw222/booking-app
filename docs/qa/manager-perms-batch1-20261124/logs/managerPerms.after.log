@@ -1,0 +1,19 @@
+PASS Q1 오너: 매니저 18개 화면 정상 렌더링(5xx·오류경계·pageerror 없음) — 18/18
+PASS Q2 오너: 센터 전환 후에도 전체 메뉴 유지(권한 조회 없이 전권) — owner menu=21개
+PASS Q3 오너: 권한 조회 요청 0건(role_permissions·account_center_permissions) — n=0
+PASS Q4 스태프: 매니저 18개 화면 정상 렌더링(5xx·오류경계·pageerror 없음) — 18/18
+PASS Q5 스태프: 센터1(제한) 메뉴 ⊂ 오너 메뉴이고 더 적다 — c1=3 owner=21
+PASS Q6 스태프: 센터2(확장) 메뉴가 센터1보다 많고 상품·룸·결제 항목 포함 — c1=/manager/classes,/manager/notifications,/manager/progress/record | c2=/manager/classes,/manager/membership-rules,/manager/notifications,/manager/progress/record,/manager/rooms
+PASS Q7 센터 전환(2→1): 전환 후 프레임에 센터2 전용 메뉴가 남지 않고 최종 메뉴=센터1 — 센터1 선택 후 프레임 241개 중 stale 0, 센터2 전용=2개
+PASS Q8 새로고침 후 권한 정상 복원(센터2 facility.room → 룸 관리 버튼 표시 일관) — before=true
+PASS Q9 스태프 센터1(facility.room 없음): 룸 관리 버튼 숨김
+PASS Q10 로그아웃(저장소·쿠키 삭제) 후 오너 로그인: 이전 스태프 권한 흔적 없이 전체 메뉴
+PASS Q11 빠른 화면 이동(6개 연속) 후 마지막 화면(settings) 정상·pageerror 0·무한 렌더링 없음 — pageerrors=0
+PASS Q12 스태프 단일 화면 6초 유휴: 권한 조회 요청이 소수(무한 재조회 없음) — role/override 요청 4회
+INFO perm-requests-per-page-load=4
+PASS Q13 권한 조회 실패(500): 기존과 같이 오류 토스트 표시·크래시 없음·관리 버튼 노출 안 됨 — toast="권한을 불러오지 못했어요: boom-perm-error
+×"
+PASS Q14 태블릿 매니저 nav: 스태프 권한에 맞는 메뉴 + 스와이프로 펼침(aria-expanded) — links=6 false->true
+PASS Q15 전 과정 pageerror(미처리 예외)·무한 렌더링 경고 0건
+PASS Q16 외부 호스트 요청은 모두 차단 — 없음
+SUMMARY pass=16 fail=0

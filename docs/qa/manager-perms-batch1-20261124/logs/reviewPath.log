@@ -1,0 +1,29 @@
+PASS R1 심사관 홈: '수강권 및 결제 확인 센터' 섹션에 A10TION 피겨팀 표시
+PASS R2 심사관 홈: 별도 심사 센터(테스트 상품 센터) 미노출, '심사용' 문구 없음
+PASS R3 심사관 /products: A10TION 판매 중 수강권 3종 표시
+PASS R4 심사관 /products: 만료된 10월 상품·다른 센터 상품 미노출
+PASS R5 조회 전용 센터 상세: 상품 3종 행
+PASS R6 조회 전용: 구매·담기·예약 버튼 없음, 안내 문구 표시
+PASS R7 상품 행마다 '결제 화면 확인 (구매 불가)' 링크 3개
+PASS R8 결제 화면: 실제 결제 버튼 비활성·'조회 전용' 표시, 안내 문구
+PASS R9 결제 화면: '카드 결제창 확인(승인 없음)' 카드 표시(심사관·허용 센터 상품)
+PASS R10 인증창 호출: goPay 1회, 공용 테스트 MID, 금액=상품 기본가, 전용 복귀 URL
+PASS R11 인증창 열림 상태: 버튼 잠금 + 상태 초기화 제공(준비 중에 갇히지 않음)
+PASS R12 인증창 확인 중 승인·prepare·return-token·confirm 등 결제 API 호출 0건(review-window 만)
+PASS R13 review-window API 호출은 check/open POST 뿐
+PASS S0 모의 심사 계정 로그인(격리 GoTrue)
+PASS S1 조회 전용: create_order_secure 거부
+PASS S2 조회 전용: 장바구니 담기 거부
+PASS S3 조회 전용: 구매신청 거부
+PASS S4 A10TION 주문·장바구니·구매신청·수강권 행 0건(인증창 확인·구매 시도 이후)
+PASS S5 허용 센터 RPC: A10TION 1건, can_purchase=false
+PASS G1 일반 회원 홈: 심사관 섹션·'결제 확인 센터' 없음, 심사 센터 미노출
+PASS G2 일반 회원: 실제 센터(A10TION)는 정상(구매 버튼 있음·조회 전용 아님·결제창 확인 링크 없음)
+PASS G3 일반 회원: 심사 센터 직접 URL 은 센터 정보를 보여 주지 않음
+PASS G4 일반 회원 결제 화면: 심사 인증창 카드 없음, 카드 결제는 비노출(직접결제만)
+PASS N1 비로그인 홈: 심사관 섹션·심사 센터 없음
+PASS N2 비로그인: 심사 센터 직접 URL 은 상품·센터 정보를 보여 주지 않음
+PASS N3 비로그인: review-window check 거부(allowed 아님)
+PASS X1 외부 호스트로 나간 요청 0건(차단된 호스트 집계)
+
+결과: 27/27 PASS, 차단된 외부 호스트: 없음

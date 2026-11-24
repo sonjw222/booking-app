@@ -26,7 +26,7 @@ import { fetchExistingClassOptions, type ExistingClassOption } from "../../../li
 import { loadClassOptionsGuarded } from "../../../lib/classOptionsLoader";
 import { fetchVisibilityMemberLabels } from "../../../lib/visibilityMemberLabels";
 import { fetchGrades, fetchMembers, type Grade, type CenterMember } from "../../../lib/members";
-import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
+import { canSeeManagerMenu } from "../../../lib/roles";
 import ExpiryOptionField, { type ExpiryOptionValue } from "../../components/ExpiryOptionField";
 import CountPriceEditor from "../../components/CountPriceEditor";
 import CatalogSearchFilter from "../../components/CatalogSearchFilter";
@@ -36,6 +36,7 @@ import { bulkDeleteConfirmMessage, bulkDeleteToast, effectiveSelection, selectAl
 import { validateGoodsForm, goodsListLabel, draftsFromTiers, type GoodsPricingMode } from "../../../lib/goodsForm";
 import { draftsToTiers, type TierDraft } from "../../../lib/selectableCount";
 import { filterCatalog, uniqueGroupLabels, catalogEmptyMessage, isFilterActive, EMPTY_CATALOG_FILTER } from "../../../lib/catalogFilter";
+import { useMyEffectivePerms } from "../../components/useMyEffectivePerms";
 
 // 요일 선택형 수강권은 요일이 지정된 예약조건이 1개 이상 있어야 회원이 구매할 때 요일을 고를 수 있다.
 const WEEKDAY_NEEDS_RULES_MESSAGE = "요일 선택형 수강권은 예약조건을 1개 이상 등록해야 회원이 구매할 수 있어요.";
@@ -101,7 +102,6 @@ export default function MembershipRulesPage() {
   const [rPick, setRPick] = useState("");
   const [existingClasses, setExistingClasses] = useState<ExistingClassOption[]>([]);
   const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
-  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
   // 다중 선택 삭제 — 평상시에는 꺼져 있고 "선택"을 눌러야 체크 UI가 나타난다.
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -132,16 +132,7 @@ export default function MembershipRulesPage() {
 
   const activeCenter = centers.find((c) => c.id === centerId);
 
-  useEffect(() => {
-    if (!activeCenter) return;
-    if (activeCenter.isOwner) { setMyPerms(null); return; }
-    let cancelled = false;
-    setMyPerms(null);
-    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
-      .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
-    return () => { cancelled = true; };
-  }, [activeCenter]);
+  const myPerms = useMyEffectivePerms(activeCenter, setError);
 
   // 이 화면 메뉴 게이트는 pass.create지만, "예약조건"(schedule_rules)은 별도로
   // pass.update RLS를 요구한다 — 상품 CRUD와는 다른 키라 여기서 따로 체크한다.

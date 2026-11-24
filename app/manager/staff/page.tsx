@@ -15,12 +15,13 @@ import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
 import UiIcon from "../../components/UiIcon";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
+import { useMyEffectivePerms } from "../../components/useMyEffectivePerms";
 import {
   fetchPermissions, fetchRoles, createRole, deleteRole,
   fetchRolePermissions, saveRolePermissions,
   fetchStaff, searchAccounts, type StaffCandidate, inviteStaff, updateStaffRole, removeStaff,
   buildTree, togglePermission, CATEGORY_LABEL,
-  fetchMyEffectivePermissionKeys, canSeeManagerMenu,
+  canSeeManagerMenu,
   type Permission, type Role, type Staff,
 } from "../../../lib/roles";
 
@@ -56,7 +57,6 @@ export default function StaffPage() {
   const [roleSheet, setRoleSheet] = useState(false);
   const [newRoleName, setNewRoleName] = useState("");
   const [staffDetail, setStaffDetail] = useState<Staff | null>(null);
-  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2400); }
 
@@ -94,16 +94,7 @@ export default function StaffPage() {
   // 이 화면 자체는 오너/매니저 누구나 열 수 있지만(메뉴 노출은 별도), 버튼별로
   // 실제 서버 권한(facility.staff.*, facility.role_permission)이 있는지 미리 계산해
   // 없는 버튼은 눌러도 RLS에 막힐 걸 미리 숨긴다 — 오너는 항상 전권.
-  useEffect(() => {
-    if (!activeCenter) return;
-    if (activeCenter.isOwner) { setMyPerms(null); return; }
-    let cancelled = false;
-    setMyPerms(null);
-    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
-      .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
-    return () => { cancelled = true; };
-  }, [activeCenter]);
+  const myPerms = useMyEffectivePerms(activeCenter, setError);
 
   function canDo(key: string): boolean {
     return canSeeManagerMenu(activeCenter?.isOwner ?? false, myPerms, key);

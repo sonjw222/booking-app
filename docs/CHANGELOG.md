@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-11-24 — 매니저 권한 초기화 공통 훅 `useMyEffectivePerms` (Issue #274 Batch 1, `refactor/manager-permissions-hook-batch1-20261124`, 운영 미반영)
+- 매니저 18개 화면(`app/manager/**/page.tsx`)이 똑같이 복사해 쓰던 "내 유효 권한 조회" `useEffect`(effect 본문 동기 `setMyPerms(null)` 2곳)를 `app/components/useMyEffectivePerms.ts` 한 곳으로 통합. 조회 결과를 "어느 센터 기준인지(key)"와 함께 저장하고 반환값을 렌더 중에 파생 → `react-hooks/set-state-in-effect` **88 → 70**(18건 해결), ESLint 에러 163 → **145**, 경고 28 유지, 새 경고·이동 0.
+- 동작 유지: 오너 null(전권)·비오너 조회 중 null(메뉴 숨김)·`[center]` 의존성(객체가 바뀔 때 재조회)·실패 시 각 화면 `setError`·권한 조회 요청 수 동일(화면당 4회). 개선: 센터 전환 직후 이전 센터 권한이 한 렌더 남던 현상 제거(격리 브라우저 QA 에서 정리 전 main 은 센터 전환 후 stale 1프레임, 수정 후 0).
+- 검증: tsc 0, `npm run lint` 새 에러 0, Vitest 전체 통과(훅 단위 테스트 9건 추가), `next build`, 격리 브라우저 QA `tests/qa/managerPerms/batch1.mjs` 16/16(정리 전 main 은 15/16). 상세: `docs/qa/manager-perms-batch1-20261124/REPORT.md`. SQL·RLS·결제 변경 없음.
+
 ## 2026-11-24 — Integration 테스트 fixture 순서 의존 제거 (Issue #279, 테스트만 변경, 앱 코드·SQL 없음)
 - `class-trainers-and-pass-selection-mode.test.ts` 의 `instructorNames` describe 가 회원 A 의 `center_members`(내부 QA 센터 RLS 조건)와 활성 `memberships`(`fetchMonthData` 조건)를 스스로 만들고(이미 있으면 재사용), 새로 만든 행만 `afterAll` 에서 정리하도록 수정. 파일 단독 실행·순서 셔플·전체 실행 모두 통과. #277 의 KST 월 경계 수정은 유지.
 

@@ -26,7 +26,7 @@ import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
 import { fetchMyCenters, type ManagedCenter } from "../../../lib/manager";
 import { fetchCenterDetail, updateCenterIntro, uploadCenterPhoto, centerPhotoUrl, type IntroBlock } from "../../../lib/center";
-import { fetchMyEffectivePermissionKeys, canSeeManagerMenu } from "../../../lib/roles";
+import { canSeeManagerMenu } from "../../../lib/roles";
 import MapPicker from "./MapPicker";
 import MapPreview from "../../components/MapPreview";
 import RichTextEditor from "../../components/RichTextEditor";
@@ -34,6 +34,7 @@ import { fetchCategories, type ServiceCategory } from "../../../lib/operator";
 import { ZoomableImage } from "../../components/ImageViewer";
 import UiIcon from "../../components/UiIcon";
 import { isAppSettingsSupported, openAppSettings } from "../../../lib/nativeAppSettings";
+import { useMyEffectivePerms } from "../../components/useMyEffectivePerms";
 
 // 구버전 평문 블록을 HTML로 변환 (줄바꿈 유지 + 태그 이스케이프)
 function escapeToHtml(text: string): string {
@@ -70,7 +71,6 @@ export default function CenterInfoPage() {
   // 다이얼로그를 다시 안 띄움) 설정 화면 진입 버튼을 error-toast에 추가로 보여준다.
   const [locPermDenied, setLocPermDenied] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [myPerms, setMyPerms] = useState<Set<string> | null>(null);
 
   function showToast(m: string) { setToast(m); setTimeout(() => setToast(null), 2200); }
 
@@ -149,16 +149,7 @@ export default function CenterInfoPage() {
   // 결제수단/후기포인트 편집 가능 여부 계산 (오너는 전권이라 건너뜀) — DB 트리거
   // (guard_center_sensitive_fields_change)가 최종 방어선이고, 이건 그걸 미리 UI에
   // 반영해 권한 없는 스태프가 애초에 값을 못 건드리게 하는 용도.
-  useEffect(() => {
-    if (!activeCenter) return;
-    if (activeCenter.isOwner) { setMyPerms(null); return; }
-    let cancelled = false;
-    setMyPerms(null);
-    fetchMyEffectivePermissionKeys(activeCenter.managerCenterId, activeCenter.roleId)
-      .then((keys) => { if (!cancelled) setMyPerms(keys); })
-      .catch((e) => { if (!cancelled) setError(e.message); });
-    return () => { cancelled = true; };
-  }, [activeCenter]);
+  const myPerms = useMyEffectivePerms(activeCenter, setError);
 
   // 이 화면 전체(소개글/주소/전화 등 포함)에 대한 편집 권한 — "매니저 센터 수정" RLS가
   // 이제 has_permission(id,'facility.info') OR is_platform_admin()으로 좁혀져 있어
