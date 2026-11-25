@@ -4,6 +4,7 @@ import { errMsg } from "./errorMessage";
 import { useEffect, useRef, useState } from "react";
 import { searchAccountsForMember, type MemberCandidate } from "../../lib/members";
 import SheetOverlay from "./SheetOverlay";
+import { useResetOnChange } from "./useResetOnChange";
 
 /*
   관리자 > 회원 > "+회원" 추가 시트(2026-10-04 분리). 검색은 서버 RPC(search_member_candidates)가 센터별 권한을 확인한다 — 여기서는 "RPC가 준 결과가 화면에서 사라지지 않게" 하는 클라이언트 방어만 한다.
@@ -34,9 +35,11 @@ export default function MemberAddSheet({ centerId, centerName, busy = false, onC
   const listRef = useRef<HTMLDivElement>(null);
 
   // 센터가 바뀌거나 시트가 닫히면 이전 센터의 상태/진행 중 응답을 폐기한다.
+  //  · 화면 상태(결과·검색어·진행 표시·오류)는 렌더 중에 바로 비운다(이전 센터 결과가 한 프레임도 커밋되지 않음).
+  //  · 진행 중 요청 무효화(seq/inflight ref)는 렌더 밖에서 해야 해서 기존처럼 effect 에 둔다.
+  useResetOnChange([centerId], () => { setResults([]); setSearchedKw(null); setSearching(false); setError(null); });
   useEffect(() => {
     seqRef.current++; inflightRef.current = null;
-    setResults([]); setSearchedKw(null); setSearching(false); setError(null);
     return () => { seqRef.current++; inflightRef.current = null; };
   }, [centerId]);
 

@@ -24,6 +24,7 @@ import { fetchDashboardSummary, won, type DashboardSummary } from "../../lib/sal
 import EmptyState from "../components/EmptyState";
 import ErrorState from "../components/ErrorState";
 import { useMyEffectivePerms } from "../components/useMyEffectivePerms";
+import { useResetOnChange } from "../components/useResetOnChange";
 
 type DashPeriod = "today" | "7d" | "30d";
 
@@ -137,11 +138,11 @@ export default function ManagerDashboard() {
     loadCenters();
   }, [loadCenters]);
 
+  // 센터가 바뀌면 이전 센터의 오늘 수업을 비우고 "불러오는 중" 으로 — 렌더 중 초기화(이전 센터 수업이 한 프레임도 커밋되지 않음). 센터가 없으면 예전처럼 아무것도 하지 않는다.
+  useResetOnChange([activeCenterId], () => { if (activeCenterId) { setTodayClasses([]); setTodayLoading(true); } });
   useEffect(() => {
     if (!activeCenterId) return;
     let cancelled = false;
-    setTodayClasses([]);
-    setTodayLoading(true);
     fetchTodayClasses(activeCenterId)
       .then((classes) => { if (!cancelled) setTodayClasses(classes); })
       .catch((e) => { if (!cancelled) setError(e.message); })

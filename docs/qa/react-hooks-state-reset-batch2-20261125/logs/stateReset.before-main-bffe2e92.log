@@ -1,0 +1,46 @@
+OBS N1 [false,true,false]
+PASS N1 스와이프 오른쪽=펼침, 왼쪽=접힘 — false->true->false
+OBS N2 [true,true,false]
+PASS N2 펼친 상태에서 다른 메뉴 이동 → 경로 변경 + compact 복귀 — exp=true path=/manager/classes after=false
+OBS N3 [true,false]
+PASS N3 같은 경로 메뉴 클릭: 기존 정책(클릭 시 collapse)과 동일하게 접힘·재초기화 오류 없음 — before=true after=false
+OBS N4 ["/manager/notifications",false]
+PASS N4 빠른 연속 메뉴 이동(3회) 후 마지막 경로·compact·pageerror 없음 — path=/manager/notifications
+OBS N5 [true,false,false]
+PASS N5 화면 크기 변경(범위 밖 1440 → 다시 1024): 접힌 상태로 복귀(펼침 잔존 없음) — true->false->false
+OBS N6 [true,false]
+PASS N6 새로고침 후 compact 로 정상 표시
+OBS N7 5
+PASS N7 스태프 권한별 메뉴 표시 유지(제한 역할: 메뉴 수가 오너보다 적음) — links=5
+OBS NM1 [false,true,false]
+PASS NM1 회원 nav 스와이프 펼침/접힘 — false->true->false
+OBS NM2 ["/search",false]
+PASS NM2 회원 nav 이동 후 compact
+OBS M1 true
+PASS M1 회원 추가 시트: 검색 결과 표시
+OBS M2 ["",false]
+PASS M2 센터 전환 후 다시 열면 이전 센터 검색 결과가 남지 않음 — 입력값=""
+OBS C1 2
+PASS C1 지급 시트: 검색어 입력 → 회원 결과 표시 — n=2
+OBS C2 0
+PASS C2 검색어를 지우면 결과가 즉시 비워짐 — n=0
+OBS C3 1
+PASS C3 다시 입력하면 결과 재조회
+OBS C4 0
+PASS C4 시트를 닫았다 다시 열면 이전 결과가 남지 않음 — n=0
+OBS R1 true
+PASS R1 센터 전환(UX→C2→UX) 후 수강권 규칙 화면 정상
+OBS P1 {"v0":"12","r0":12,"v1":"5","r1":5,"v2":"","r2":5,"v3":"5","r3":5}
+PASS P1 입력 중에는 작성 중인 글자를 유지(5 입력 → 행 5개, 비움 → 빈 칸 유지), 포커스를 잃으면 실제 행 수로 되돌림 — 12/12 → 5/5 → ""/5 → 5/5
+OBS K1 [true,0]
+PASS K1 수업 등록 폼 열림 + 충돌 경고 영역 오류 없음
+OBS D1 "오늘 수업"
+PASS D1 센터 5회 빠른 전환 후 마지막 센터 기준으로 오늘 수업 영역 정상 렌더 — 마지막 선택 센터 유지
+OBS AA1 true
+PASS AA1 admin-assignments 정상 렌더
+OBS S1 [{"has결과":true,"len":2},{"has결과":true,"len":7},{"has결과":true,"len":2}]
+PASS S1 검색어 1자 → 2자(결과) → 비움: 상태 초기화·오류 없음 — len 96/352/96
+PASS X-pageerror 전 과정 pageerror·무한 렌더링 경고 0건
+OBS REQ {"rpc":52,"notifications":16,"home_banners":5,"service_categories":6,"profiles":35,"accounts":32,"manager_centers":31,"classes":24,"memberships":9,"centers":6,"class_reservation_counts":10,"account_center_permissions":18,"role_permissions":1,"center_holidays":2,"rooms":2,"products":10,"center_settings":2,"membership_product_grades":9,"membership_product_members":9,"membership_schedule_rules":7,"center_subscriptions":3,"center_members":5,"member_grades":9,"coupons":2,"product_count_prices":8,"member_coupons":1,"admin_action_logs":1,"center_reviews":1}
+PASS X-external 외부 호스트 요청은 모두 차단 — 없음
+SUMMARY pass=23 fail=0 blocked=0

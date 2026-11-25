@@ -65,7 +65,9 @@ describe("수업 목록 stale race", () => {
   it("페이지: centerIdRef는 centerId effect에서만 갱신(loader/loadClassOptions가 덮어쓰지 않음), 단건/일괄이 같은 helper 사용", () => {
     const p = read("app/manager/membership-rules/page.tsx");
     expect(p.match(/centerIdRef\.current\s*=/g)).toHaveLength(1);
-    expect(p).toContain("useEffect(() => { centerIdRef.current = centerId; setExistingClasses([]); }, [centerId]);");
+    // Issue #274 Batch 2: ref 는 여전히 이 effect 한 곳에서만 갱신(위 match 1개), 목록 초기화는 useResetOnChange 로 분리.
+    expect(p).toContain("useEffect(() => { centerIdRef.current = centerId; }, [centerId]);");
+    expect(p).toContain("useResetOnChange([centerId], () => setExistingClasses([]));");
     expect(p).toContain("getCurrent: () => centerIdRef.current");
     const bulk = p.slice(p.indexOf("async function openBulkRuleSheet"), p.indexOf("async function handleBulkAddRules"));
     expect(bulk).toContain("await loadClassOptions();");

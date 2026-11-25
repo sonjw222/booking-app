@@ -1,0 +1,41 @@
+OBS A1 ["[QA] 쿠폰-A상품전용"]
+PASS A1 상품 A: A 전용 쿠폰만 표시 — [QA] 쿠폰-A상품전용
+OBS A1s ["[QA] 쿠폰-A상품전용"]
+PASS A1s 쿠폰 선택 상태 반영 — [QA] 쿠폰-A상품전용
+OBS A2 {"seq":["[QA] 쿠폰-A상품전용","","[QA] 쿠폰-A상품전용","[QA] 쿠폰-B상품전용"],"final":["[QA] 쿠폰-B상품전용"],"on":[]}
+PASS A2 상품 B 로 변경: 최종 B 전용 쿠폰만, A 쿠폰·A 선택 상태가 남지 않음 — seq=["[QA] 쿠폰-A상품전용","","[QA] 쿠폰-A상품전용","[QA] 쿠폰-B상품전용"]
+OBS A3 {"seq":["[QA] 쿠폰-B상품전용",""],"final":[]}
+PASS A3 쿠폰 적용 불가 상품으로 변경: 쿠폰 목록이 비워짐 — seq=["[QA] 쿠폰-B상품전용",""]
+OBS A4 {"seq":["[QA] 쿠폰-A상품전용","","[QA] 쿠폰-A상품전용"],"final":["[QA] 쿠폰-A상품전용"]}
+PASS A4 빠른 A→B→A + 늦은 B 응답: 최종 A 쿠폰만, 늦게 도착한 B 응답이 현재 목록을 덮지 않음 — seq=["[QA] 쿠폰-A상품전용","","[QA] 쿠폰-A상품전용"] B가 한 번이라도 보임=false
+OBS A-req {"rpc":23,"profiles":14,"accounts":8,"centers":6,"product_count_prices":6}
+OBS B1 [20,40]
+PASS B1 더보기로 표시 개수 확장(20 → 40) — 20->40
+OBS B2 20
+PASS B2 검색어 변경 → 표시 개수가 처음(20)으로 초기화 — n=20
+OBS B3 [40,20]
+PASS B3 다시 확장 후 검색어를 지우면 초기화 — 40->20
+OBS B4 [40,20]
+PASS B4 배치 유형 필터 변경(목록 재조회) → 표시 개수 초기화 — 40->20
+OBS B5 {"rapid":{"admin_action_logs":5}}
+PASS B5 빠른 연속 필터 변경(6회) 후 정상·무한 재조회 없음 — {"admin_action_logs":5}
+OBS B-req {"rpc":2,"notifications":1,"profiles":2,"accounts":1,"manager_centers":2,"account_center_permissions":1,"admin_action_logs":8}
+OBS C1 1
+PASS C1 충돌 조건(같은 룸·겹치는 시간): 경고 표시 — n=1
+OBS C2 0
+PASS C2 조건 해제(겹치지 않는 시간) 후 경고 초기화 — n=0
+OBS C3 0
+PASS C3 빠른 변경 + 늦은 충돌 응답: 오래된 경고가 다시 나타나지 않음 — n=0
+OBS C4 [1,0]
+PASS C4 폼을 닫았다 다시 열면 경고가 남지 않음 — 1->0
+OBS C-req {"rpc":12,"notifications":1,"profiles":2,"accounts":1,"manager_centers":4,"classes":8,"class_reservation_counts":8,"product_count_prices":2,"account_center_permissions":2,"center_holidays":2,"rooms":2,"products":2,"center_settings":2,"membership_product_grades":2,"membership_product_members":2,"membership_schedule_rules":2}
+OBS D1 {"mid":["CI User B"],"fin":["CI User A"]}
+PASS D1 이전 요청(지연)이 새 요청 뒤에 도착: 정리 전과 같은 결과(관찰값 비교) — mid=CI User B final=CI User A
+OBS D1-req {"rpc":4,"notifications":1,"profiles":2,"accounts":1,"manager_centers":2,"memberships":2,"product_count_prices":2,"account_center_permissions":2,"products":2,"membership_product_grades":2,"membership_product_members":2,"coupons":2,"member_coupons":1,"center_members":2}
+OBS D2 {"mid":{"A":false,"B":true},"fin":{"A":false,"B":true}}
+PASS D2 최신 요청 결과만 유지(늦게 도착한 이전 요청이 현재 화면을 덮지 않음) — {"A":false,"B":true}
+OBS D3 [true,true,true]
+PASS D3 검색어 전환(UX→QA→1자): 이전 결과가 남지 않고 오류 없음
+PASS X-pageerror 전 과정 pageerror·무한 렌더링 경고 0건
+PASS X-external 외부 호스트 요청은 모두 차단 — 없음
+SUMMARY pass=19 fail=0 blocked=0

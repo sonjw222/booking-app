@@ -37,6 +37,7 @@ import { validateGoodsForm, goodsListLabel, draftsFromTiers, type GoodsPricingMo
 import { draftsToTiers, type TierDraft } from "../../../lib/selectableCount";
 import { filterCatalog, uniqueGroupLabels, catalogEmptyMessage, isFilterActive, EMPTY_CATALOG_FILTER } from "../../../lib/catalogFilter";
 import { useMyEffectivePerms } from "../../components/useMyEffectivePerms";
+import { useResetOnChange } from "../../components/useResetOnChange";
 
 // 요일 선택형 수강권은 요일이 지정된 예약조건이 1개 이상 있어야 회원이 구매할 때 요일을 고를 수 있다.
 const WEEKDAY_NEEDS_RULES_MESSAGE = "요일 선택형 수강권은 예약조건을 1개 이상 등록해야 회원이 구매할 수 있어요.";
@@ -92,7 +93,6 @@ export default function MembershipRulesPage() {
   const [grades, setGrades] = useState<Grade[]>([]);
   const [visMemberSearch, setVisMemberSearch] = useState("");
   const [visMemberResults, setVisMemberResults] = useState<CenterMember[]>([]);
-  const [visMemberSearchBusy, setVisMemberSearchBusy] = useState(false);
 
   // 조건 추가 시트 (어느 상품에)
   const [ruleFor, setRuleFor] = useState<Product | null>(null);
@@ -107,7 +107,9 @@ export default function MembershipRulesPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // 예약조건 일괄 설정: 선택한 수강권들(시트가 열려 있는 동안 고정). 기존 "예약조건 추가" 시트를 그대로 재사용한다.
   // 센터가 바뀌면 이전 센터 수업 목록을 즉시 버린다(늦게 도착한 이전 요청 결과도 loadClassOptions가 무시)
-  useEffect(() => { centerIdRef.current = centerId; setExistingClasses([]); }, [centerId]);
+  // (상태는 렌더 중에 바로 비우고, 늦은 응답 판별용 ref 는 렌더 밖인 effect 에서만 갱신한다)
+  useResetOnChange([centerId], () => setExistingClasses([]));
+  useEffect(() => { centerIdRef.current = centerId; }, [centerId]);
   const [bulkTargets, setBulkTargets] = useState<Product[] | null>(null);
   // UX 감사(B-8) — 수강권 상품이 100개+(이름이 UUID로 끝나 구분도 안 됨)면 검색/페이징 없이
   // 전부 렌더돼 원하는 걸 찾기 어려웠다. 이름 검색 + 20개씩 "더보기"로 완화.
@@ -259,21 +261,25 @@ export default function MembershipRulesPage() {
   // 회원검색 재사용(요청 2-3번 "기존 회원검색 구조 재사용") — lib/members.ts의
   // fetchMembers(keyword)를 그대로 쓴다. 새 검색 컴포넌트/쿼리를 만들지 않음.
   // 150ms 디바운스(폴리시 배치가 정착시킨 관례와 동일한 대역).
+  // "검색 중…" 표시는 effect 에서 동기로 켜지 않고 파생한다: 마지막으로 "끝난" 검색의 키(센터|검색어)가 지금 검색 키와 다르면 검색 중.
+  //  (예전엔 effect 가 busy 를 true 로 켜고 응답이 오면 끄는 방식이라, 150ms 디바운스 안에 검색어를 지우면 "검색 중…" 이 계속 남는 문제가 있었다 — 파생하면 그 경우도 사라진다.)
+  const visSearchEnabled = !!centerId && pVisType === "selected_members" && !!visMemberSearch.trim();
+  const visSearchKey = visSearchEnabled ? `${centerId}|${visMemberSearch.trim()}` : null;
+  const [visSettledKey, setVisSettledKey] = useState<string | null>(null);
+  // 검색 조건이 없어지면 결과와 완료 키를 비운다(렌더 중 초기화: 조건이 true→false 로 바뀔 때만).
+  useResetOnChange([visSearchEnabled], () => { if (!visSearchEnabled) { setVisMemberResults([]); setVisSettledKey(null); } });
+  const visMemberSearchBusy = visSearchKey !== null && visSettledKey !== visSearchKey;
   useEffect(() => {
-    if (!centerId || pVisType !== "selected_members" || !visMemberSearch.trim()) {
-      setVisMemberResults([]);
-      return;
-    }
+    if (!visSearchEnabled || visSearchKey === null) return;
     const kw = visMemberSearch.trim();
-    setVisMemberSearchBusy(true);
     const t = setTimeout(() => {
       fetchMembers(centerId, { keyword: kw })
         .then((rows) => setVisMemberResults(rows.slice(0, 30))) // 회원 많아도 버벅이지 않게 상한
         .catch(() => setVisMemberResults([]))
-        .finally(() => setVisMemberSearchBusy(false));
+        .finally(() => setVisSettledKey(visSearchKey));
     }, 150);
     return () => clearTimeout(t);
-  }, [centerId, pVisType, visMemberSearch]);
+  }, [centerId, pVisType, visMemberSearch, visSearchEnabled, visSearchKey]);
 
   async function handleCreateProduct() {
     if (!centerId || !pName.trim()) { setError("상품 이름을 입력해주세요"); return; }
