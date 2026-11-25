@@ -148,7 +148,9 @@ describe("[3] 일괄 시트도 현재 센터 수업 목록을 새로 읽는다",
   });
   it("race 방어는 lib/classOptionsLoader.ts로 위임(동작은 releaseQaRaceAndAutoName.test.ts), 센터 변경 시 목록 초기화", () => {
     expect(p).toContain("await loadClassOptionsGuarded({");
-    expect(p).toContain("useEffect(() => { centerIdRef.current = centerId; setExistingClasses([]); }, [centerId]);");
+    // Issue #274 Batch 2: 센터 변경 시 목록 초기화는 effect 대신 렌더 중 초기화(useResetOnChange)로, ref 갱신은 렌더 밖 effect 로 분리 — 의도(센터가 바뀌면 이전 센터 수업 목록을 즉시 버림)는 그대로.
+    expect(p).toContain("useResetOnChange([centerId], () => setExistingClasses([]));");
+    expect(p).toContain("useEffect(() => { centerIdRef.current = centerId; }, [centerId]);");
   });
 });
 

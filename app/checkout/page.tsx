@@ -37,6 +37,7 @@ import ErrorState from "../components/ErrorState";
 import { hapticSuccess } from "../../lib/nativeHaptics";
 import NicepayReviewWindow, { type ReviewWindowStatus } from "../components/NicepayReviewWindow";
 import { fetchNicepayViewOnlyCenter } from "../../lib/nicepayReviewScope";
+import { useResetOnChange } from "../components/useResetOnChange";
 
 // 카카오페이/토스페이는 로고 자산이 없어 outline 아이콘 하나로 뭉치면 구분이 안 되므로
 // --vendor-* 색 점(dot)으로, 나머지는 의미가 통하는 outline 아이콘으로 구분한다.
@@ -204,8 +205,11 @@ function CheckoutContent() {
   // couponEligible=false면 조회 자체를 안 한다(UI에 아예 안 보여줌). 실제 자격은 어차피
   // 결제 확정 RPC가 다시 막지만(_issue_membership_and_record_payment), 여기서 먼저
   // 걸러야 "쓸 수 없는 쿠폰을 굳이 보여줬다가 결제 시점에 막히는" 혼란을 안 준다.
+  // 이 상품이 쿠폰 적용 불가가 되면(또는 상품이 없으면) 이전에 조회한 쿠폰 목록을 비운다 — 렌더 중 초기화(적용 가능 → 불가로 바뀔 때만; 가능한 상품끼리 바뀔 때는 예전처럼 새 응답이 올 때까지 이전 목록 유지).
+  const couponsApplicable = !!product && product.couponEligible;
+  useResetOnChange([couponsApplicable], () => { if (!couponsApplicable) setApplicableCoupons([]); });
   useEffect(() => {
-    if (!product || !product.couponEligible) { setApplicableCoupons([]); return; }
+    if (!product || !product.couponEligible) return;
     let mounted = true;
     fetchApplicableCoupons(product.id, baseAmount, centerId)
       .then((list) => { if (mounted) setApplicableCoupons(list); })

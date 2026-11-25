@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { useResetOnChange } from "../components/useResetOnChange";
 import { searchHome, searchClasses, haversineKm, NEARBY_RADIUS_KM, type SearchCenter, type SearchClass } from "../../lib/home";
 import { centerPhotoUrl } from "../../lib/center";
 import EmptyState from "../components/EmptyState";
@@ -119,12 +120,14 @@ export default function SearchPage() {
     }
   }
 
+  // 검색어가 2자 미만이 되면 검색 상태를 비운다 — 렌더 중 초기화(2자 이상 → 미만으로 바뀔 때만). 늦은 응답을 버리는 ref 갱신은 렌더 밖(effect)에서 한다.
+  const queryTooShort = kw.trim().length < 2;
+  useResetOnChange([queryTooShort], () => { if (queryTooShort) { setSearched(false); setBusy(false); setError(null); } });
   useEffect(() => {
     const query = kw.trim();
     if (query.length < 2) {
       immediateTerm.current = null;
       requestId.current++;
-      setSearched(false); setBusy(false); setError(null);
       return;
     }
     if (immediateTerm.current === query) { immediateTerm.current = null; return; }

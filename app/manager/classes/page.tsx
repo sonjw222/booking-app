@@ -55,6 +55,7 @@ import {
 } from "../../../lib/passes";
 import { assignReservation, cancelAdminReservation, type AssignmentType } from "../../../lib/adminAssignment";
 import { useMyEffectivePerms } from "../../components/useMyEffectivePerms";
+import { useResetOnChange } from "../../components/useResetOnChange";
 import {
   ADMIN_REASON_CODES, ADMIN_REASON_LABELS, type AdminReasonCode,
   normalizeReasonDetail, adminBadges,
@@ -231,8 +232,11 @@ export default function ClassManagePage() {
   const origPassRef = useRef<PassPolicy | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const conflictCheckEnabled = formOpen && !!activeCenterId && !!form.date && !!form.start && !!form.end;
+  // 조회 조건이 없어지면(폼 닫힘·날짜/시간 비움) 이전 경고를 비운다 — 렌더 중 초기화(조건이 true→false 로 바뀔 때만; 입력 변경으로 다시 조회하는 동안은 이전 경고 유지, 예전과 동일).
+  useResetOnChange([conflictCheckEnabled], () => { if (!conflictCheckEnabled) setScheduleConflicts([]); });
   useEffect(() => {
-    if (!formOpen || !activeCenterId || !form.date || !form.start || !form.end) { setScheduleConflicts([]); return; }
+    if (!conflictCheckEnabled || !activeCenterId) return;
     let cancelled = false;
     // 입력(시간/룸/강사 칩) 변경마다 즉시 조회하지 않도록 디바운스 — 경고 전용이라 저장 시 서버 검증은 그대로.
     const timer = setTimeout(() => {
@@ -242,7 +246,7 @@ export default function ClassManagePage() {
         .catch(() => { if (!cancelled) setScheduleConflicts([]); });
     }, 300);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [formOpen, activeCenterId, form.date, form.start, form.end, form.roomId, selectedTrainers, editId]);
+  }, [conflictCheckEnabled, activeCenterId, form.date, form.start, form.end, form.roomId, selectedTrainers, editId]);
 
   // 요청 가드 — 월 이동/센터 전환을 빠르게 반복해도 가장 마지막 요청 결과만 반영한다.
   const monthGuardRef = useRef(createLatestGuard());
@@ -348,8 +352,10 @@ export default function ClassManagePage() {
   // 그 기본값이 뭔지 전혀 안 보여서 "0일 0시간 0분"처럼 보이는 빈 입력칸만 있었다(실제로는
   // 운영설정의 날짜+시각 기준 값이 적용됨). year/month와 무관하게 센터가 바뀔 때만 다시
   // 불러온다(수업 목록처럼 달마다 새로 부를 필요 없음).
+  // 센터가 없어지면 설정을 비운다(렌더 중 초기화). 센터 → 다른 센터 전환 중에는 예전처럼 새 설정이 올 때까지 이전 값 유지.
+  useResetOnChange([activeCenterId], () => { if (!activeCenterId) setCenterSettings(null); });
   useEffect(() => {
-    if (!activeCenterId) { setCenterSettings(null); return; }
+    if (!activeCenterId) return;
     fetchSettings(activeCenterId).then(setCenterSettings).catch(() => setCenterSettings(null));
   }, [activeCenterId]);
 

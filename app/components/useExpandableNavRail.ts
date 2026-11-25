@@ -23,6 +23,7 @@
 */
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import { useResetOnChange } from "./useResetOnChange";
 
 /*
   실기기 QA 개선(2026-09-25) — 이전 구현은 (1) 여는 swipe가 "화면 왼쪽 24px 가장자리"에서 시작한
@@ -86,11 +87,10 @@ export function useExpandableNavRail(scrollStorageKey: string) {
     return () => mq.removeEventListener("change", update);
   }, []);
 
-  // 범위를 벗어나면(예: 회전/리사이즈로 데스크톱 폭) 강제로 접힌 상태.
-  useEffect(() => { if (!inRailRange) setExpanded(false); }, [inRailRange]);
-
-  // 경로가 바뀌면 compact로 복귀 — 클라이언트 전환/풀 리로드 어느 쪽이든 같은 결과.
-  useEffect(() => { setExpanded(false); }, [pathname]);
+  // 범위를 벗어나면(예: 회전/리사이즈로 데스크톱 폭) 강제로 접힌 상태 + 경로가 바뀌면 compact로 복귀 — 클라이언트 전환/풀 리로드 어느 쪽이든 같은 결과.
+  // (예전엔 두 개의 effect 였다. 펼침은 rail 범위 안에서만 가능해서 "범위 진입" 시점의 초기화는 이미 접힌 상태에 대한 no-op 이므로 하나로 합쳐도 동작이 같다.
+  //  렌더 중에 바로 접으므로 경로가 바뀐 첫 프레임에 이전 펼침 상태가 남지 않는다.)
+  useResetOnChange([pathname, inRailRange], () => setExpanded(false));
 
   // 1) rail 위에서 시작한 가로 swipe — 펼침(→)/접힘(←). 마우스는 hover/click이 이미 처리.
   useEffect(() => {

@@ -35,12 +35,11 @@ export default function CountPriceEditor({
 }: { rows: TierDraft[]; onChange: (rows: TierDraft[]) => void; disabled?: boolean }) {
   const [unit, setUnit] = useState("");
   const rowMax = maxTierCount(rows);
-  const [maxText, setMaxText] = useState(String(rowMax));
-  const [editingMax, setEditingMax] = useState(false);
+  // 판매 최대 횟수 입력창: 입력 중(포커스)일 때만 "작성 중인 글자(maxDraft)" 를 따로 가지고, 아니면 실제 행 수(rowMax)를 그대로 보여 준다.
+  // (예전엔 maxText 상태를 effect 로 rowMax 에 맞춰 줬다 — 다른 상품을 열거나 값이 외부에서 바뀌면 입력창이 실제 행 수를 따라가야 하는 동작은 파생값으로 그대로 유지된다.)
+  const [maxDraft, setMaxDraft] = useState<string | null>(null);
+  const maxText = maxDraft ?? String(rowMax);
   const [blockedBy, setBlockedBy] = useState<number | null>(null);
-
-  // 다른 상품을 열거나 값이 외부에서 바뀌면 입력창을 실제 행 수에 맞춘다(입력 중에는 건드리지 않음).
-  useEffect(() => { if (!editingMax) setMaxText(String(rowMax)); }, [rowMax, editingMax]);
 
   // 행 콜백은 최신 rows/onChange를 ref로 읽어 참조가 고정된다(행 memo 전제).
   const rowsRef = useRef(rows);
@@ -54,7 +53,7 @@ export default function CountPriceEditor({
 
   function changeMax(text: string) {
     const clean = text.replace(/[^0-9]/g, "");
-    setMaxText(clean);
+    setMaxDraft(clean);
     const n = Number(clean);
     if (!(n >= 1)) return;                       // 비었거나 0이면 행을 건드리지 않는다
     const res = resizeTierDrafts(rows, n);
@@ -71,8 +70,8 @@ export default function CountPriceEditor({
       <div className="count-price-max">
         <input aria-label="판매 최대 횟수" inputMode="numeric" className="input-field" placeholder="예: 8"
           value={maxText} disabled={disabled} maxLength={3}
-          onFocus={() => setEditingMax(true)}
-          onBlur={() => { setEditingMax(false); setMaxText(String(maxTierCount(rows))); }}
+          onFocus={() => setMaxDraft(String(rowMax))}
+          onBlur={() => setMaxDraft(null)}
           onChange={(e) => changeMax(e.target.value)} />
         <span className="count-price-max-unit">회</span>
         <span className="count-price-max-cap">최대 {MAX_TIER_COUNT}회</span>

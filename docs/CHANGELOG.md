@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 2026-11-25 — 의존값 변경 시 상태 초기화 13건 정리 `useResetOnChange` (Issue #274 Batch 2, `refactor/react-hooks-state-reset-batch2-20261125`, 운영 미반영)
+- `react-hooks/set-state-in-effect` **70 → 57**(Batch 2 대상 15건 중 **13건 해결**, 예약 화면 2건은 위험 항목으로 보류), ESLint 에러 145 → **132**, 경고 28 유지, 새 경고·이동 0.
+- 공통 훅 `app/components/useResetOnChange.ts`(React 공식 "렌더 중 이전 렌더 정보로 상태 조정" 패턴, deps 비교는 useEffect 와 같은 Object.is): `useExpandableNavRail`(2건), `MemberAddSheet`, `admin-assignments`, `classes`(2), `coupons`, `membership-rules`(2), `manager/page`, `search`, `checkout`(쿠폰 목록). `CountPriceEditor` 는 effect 없이 파생값(입력 중 글자 `maxDraft` + 평소엔 실제 행 수). `membership-rules` 회원 검색의 "검색 중…" 표시는 완료 키 비교로 파생(150ms 안에 검색어를 지우면 "검색 중…" 이 남던 기존 문제도 함께 해소).
+- 동작 유지: 초기화 조건·내용 동일(렌더 중에 바로 실행돼 이전 값이 한 프레임도 커밋되지 않음), ref 갱신·타이머·네트워크는 effect 에 그대로, 사용자 입력 보존 정책 유지. 소스 문자열을 단언하는 기존 테스트 2건(`releaseQaFollowup`·`releaseQaRaceAndAutoName`)은 같은 의도를 새 코드에 맞게 갱신(삭제·skip 없음).
+- 검증: tsc 0, `npm run lint` 새 에러 0, Vitest 3,348(훅 단위 7건 추가), `next build`, Integration 52 files/328, 격리 브라우저 QA `tests/qa/stateReset/batch2.mjs` 23/23(정리 전 main 도 23/23, 관찰값·API 요청 수 동일). 상세 `docs/qa/react-hooks-state-reset-batch2-20261125/REPORT.md`. SQL·RLS·결제 변경 없음.
+
 ## 2026-11-24 — 매니저 권한 초기화 공통 훅 `useMyEffectivePerms` (Issue #274 Batch 1, `refactor/manager-permissions-hook-batch1-20261124`, 운영 미반영)
 - 매니저 18개 화면(`app/manager/**/page.tsx`)이 똑같이 복사해 쓰던 "내 유효 권한 조회" `useEffect`(effect 본문 동기 `setMyPerms(null)` 2곳)를 `app/components/useMyEffectivePerms.ts` 한 곳으로 통합. 조회 결과를 "어느 센터 기준인지(key)"와 함께 저장하고 반환값을 렌더 중에 파생 → `react-hooks/set-state-in-effect` **88 → 70**(18건 해결), ESLint 에러 163 → **145**, 경고 28 유지, 새 경고·이동 0.
 - 동작 유지: 오너 null(전권)·비오너 조회 중 null(메뉴 숨김)·`[center]` 의존성(객체가 바뀔 때 재조회)·실패 시 각 화면 `setError`·권한 조회 요청 수 동일(화면당 4회). 개선: 센터 전환 직후 이전 센터 권한이 한 렌더 남던 현상 제거(격리 브라우저 QA 에서 정리 전 main 은 센터 전환 후 stale 1프레임, 수정 후 0).

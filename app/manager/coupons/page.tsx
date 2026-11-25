@@ -25,6 +25,7 @@ import { canSeeManagerMenu } from "../../../lib/roles";
 import { fetchProducts, won, type Product } from "../../../lib/passes";
 import { fetchMembers, type CenterMember } from "../../../lib/members";
 import { useMyEffectivePerms } from "../../components/useMyEffectivePerms";
+import { useResetOnChange } from "../../components/useResetOnChange";
 import {
   fetchCoupons, createCoupon, archiveCoupon,
   issueCouponToMembers, revokeMemberCoupon, fetchIssuedMemberCoupons,
@@ -148,14 +149,17 @@ export default function CouponsPage() {
     setIssueFor(c); setIssueSearch(""); setIssueResults([]); setIssueSelected({});
   }
 
+  const issueSearchEnabled = !!centerId && !!issueFor && !!issueSearch.trim();
+  // 검색 조건이 없어지면(시트 닫힘·검색어 삭제 등) 이전 결과를 비운다 — 렌더 중 초기화(조건이 true→false 로 바뀔 때만; 조건 안에서는 이전 결과를 새 응답이 올 때까지 유지).
+  useResetOnChange([issueSearchEnabled], () => { if (!issueSearchEnabled) setIssueResults([]); });
   useEffect(() => {
-    if (!centerId || !issueFor || !issueSearch.trim()) { setIssueResults([]); return; }
+    if (!issueSearchEnabled) return;
     const kw = issueSearch.trim();
     const t = setTimeout(() => {
       fetchMembers(centerId, { keyword: kw }).then((rows) => setIssueResults(rows.slice(0, 30))).catch(() => setIssueResults([]));
     }, 150);
     return () => clearTimeout(t);
-  }, [centerId, issueFor, issueSearch]);
+  }, [centerId, issueFor, issueSearch, issueSearchEnabled]);
 
   function toggleIssueMember(cm: CenterMember) {
     setIssueSelected((prev) => {

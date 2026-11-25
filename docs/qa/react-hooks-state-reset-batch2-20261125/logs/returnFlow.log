@@ -1,0 +1,8 @@
+PASS A-pre 심사 센터 결제 화면에서 8회 선택 → 주소 count=8 — 4392-ac88-47084d27e031&count=8
+PASS A-open 결제창 확인 열기 → goPay 1회, 복귀 경로(/checkout?…count=8) 저장 — 1 {"p":"/checkout?center=47de06ec-42d8-4152-b012-389764ffd541&product=9c0dc995-6415-4392-ac8
+PASS A-closed X 종료 → '테스트 결제창 종료' 화면, 성공 표현 없음 — 테스트 결제창 종료
+PASS A-btn 주 버튼 '결제 화면으로 돌아가기'(마이페이지 아님), 센터·상품·횟수 유지 — 결제 화면으로 돌아가기 /checkout?center=47de06ec-42d8-4152-b012-389764ffd541&product=9c0dc995-6415-4392-ac88-47084d27e031&count=8
+PASS A-return 복귀 → 같은 상품 결제 화면, 8회 복원, NICEPAY 재호출(SDK 로드·goPay) 없음 — 4392-ac88-47084d27e031&count=8 sdkAfter=0
+PASS A-cleared 복귀 후 저장 값 삭제, 뒤로가기해도 종료 화면으로 돌아가지 않음
+PASS A-noorder 주문·수강권(memberships) 신규 생성 없음(격리 DB 전/후 비교) — orders 0->0 memberships 2->2
+PASS A-fallback 직접 진입(저장 경로 없음) → 센터 상세로 안전 복귀 — /center/47de06ec-42d8-4152-b012-389764ffd541

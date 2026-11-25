@@ -7,6 +7,7 @@
 */
 
 import { errMsg } from "../../components/errorMessage";
+import { useResetOnChange } from "../../components/useResetOnChange";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import Loading from "../../components/Loading";
@@ -81,7 +82,7 @@ export default function AdminAssignmentLogPage() {
   const shown = kw
     ? logs.filter((l) => l.memberName.includes(kw) || l.adminName.includes(kw) || l.classTitle.includes(kw))
     : logs;
-  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [logs, kw]);
+  useResetOnChange([logs, kw], () => setVisibleCount(PAGE_SIZE));   // 목록·검색어가 바뀌면 "더 보기" 개수를 처음으로(effect 없이 렌더 중 초기화)
 
   if (loading && logs.length === 0) {
     return <div className="app-shell assignment-page"><Loading /></div>;
