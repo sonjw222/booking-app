@@ -69,3 +69,47 @@ it('언마운트 후에는 아무 일도 하지 않는다(경고·오류 없음)
   const t = setup(); await t.mount(); const root = roots.pop()!; await act(() => root.unmount());
   expect(err).not.toHaveBeenCalled(); err.mockRestore();
 });
+
+// ── 비동기 경쟁(Issue #274 Batch 2 추가 검증): "의존값 변경 시 비움(useResetOnChange) + 이전 응답 폐기(effect cleanup 의 cancelled)" 조합 ──
+// 각 화면이 쓰는 패턴 그대로: 상태는 렌더 중에 비우고, 요청/취소는 effect 에서 한다.
+function raceSetup() {
+  const pending: Record<string, (v: string) => void> = {}; const committed: string[] = [];
+  let setKey!: (k: string) => void;
+  function Probe() {
+    const [key, sk] = React.useState('A'); setKey = sk;
+    const [result, setResult] = React.useState('');
+    useResetOnChange([key], () => setResult(''));
+    React.useEffect(() => {
+      let cancelled = false;
+      new Promise<string>((r) => { pending[key] = r; }).then((v) => { if (!cancelled) setResult(v); });
+      return () => { cancelled = true; };
+    }, [key]);
+    React.useEffect(() => { committed.push(`${key}:${result}`); });
+    return null;
+  }
+  const host = document.createElement('div'); document.body.append(host); const root = createRoot(host); roots.push(root);
+  return { committed, pending, mount: () => act(async () => root.render(React.createElement(Probe))), setKey: (k: string) => act(async () => setKey(k)), resolve: (k: string, v: string) => act(async () => pending[k](v)), last: () => committed[committed.length - 1] };
+}
+
+it('이전 요청 지연 → 의존값 변경 → 새 요청 먼저 완료 → 이전 요청 나중에 완료: 최종 화면은 새 요청 결과만(오염 없음)', async () => {
+  const t = raceSetup(); await t.mount();
+  await t.setKey('B');                       // A 요청은 아직 안 끝난 채 B 로 변경
+  await t.resolve('B', 'B-result');          // 새 요청 먼저 완료
+  await t.resolve('A', 'A-late');            // 이전 요청이 나중에 완료
+  expect(t.last()).toBe('B:B-result');
+  expect(t.committed.some((c) => c === 'B:A-late')).toBe(false);   // A 결과가 B 화면에 한 번도 커밋되지 않음
+});
+
+it('이전 결과가 이미 화면에 있던 상태에서 의존값이 바뀌면 같은 렌더에서 비워지고, 이전 값이 새 키와 함께 커밋되지 않는다', async () => {
+  const t = raceSetup(); await t.mount(); await t.resolve('A', 'A-done'); expect(t.last()).toBe('A:A-done');
+  const before = t.committed.length; await t.setKey('B');
+  expect(t.committed.slice(before).every((c) => c.startsWith('B:') && c === 'B:')).toBe(true);   // B 키로 커밋된 모든 렌더의 결과가 빈 값
+  await t.resolve('B', 'B-done'); expect(t.last()).toBe('B:B-done');
+});
+
+it('A → B → A 빠른 전환: 중간(B) 요청이 늦게 도착해도 현재(A) 화면을 덮지 않는다', async () => {
+  const t = raceSetup(); await t.mount();
+  await t.setKey('B'); await t.setKey('A');
+  await t.resolve('A', 'A-fresh'); await t.resolve('B', 'B-late');
+  expect(t.last()).toBe('A:A-fresh'); expect(t.committed.some((c) => c === 'A:B-late')).toBe(false);
+});
